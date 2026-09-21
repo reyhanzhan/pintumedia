@@ -16,15 +16,15 @@ Fondasi platform streaming responsif dengan katalog multi-platform, lima episode
 - checkout server dan webhook untuk Midtrans Snap atau Xendit Payment Sessions;
 - catatan penggunaan konten berlisensi.
 
-## Menjalankan demo cepat
+## Menjalankan demo Next.js
 
-Buka `dist/index.html` melalui server web statis. Versi ini tidak melakukan transaksi nyata.
+Jalankan `npm install`, lalu `npm run dev`. Tanpa kredensial pembayaran, seluruh tampilan dan tombol “Aktifkan akses demo” tetap dapat diuji, tetapi tidak ada transaksi nyata.
 
-## Menjalankan Next.js + Supabase
+## Mengaktifkan Supabase dan pembayaran
 
 1. Salin `.env.example` menjadi `.env.local` dan isi kredensial.
 2. Jalankan migrasi `supabase/migrations/202609220001_pintumedia.sql` pada proyek Supabase.
-3. Jalankan `npm install`, lalu `npm run dev`.
+3. Isi salah satu konfigurasi gateway pembayaran di `.env.local`.
 
 Pilih satu gateway lewat `PAYMENT_PROVIDER=midtrans` atau `PAYMENT_PROVIDER=xendit`. Gunakan sandbox sampai seluruh alur webhook teruji. Endpoint `POST /api/checkout` membuat sesi pembayaran; webhook gateway memverifikasi pembayaran dan database mengaktifkan akses sekaligus menghitung komisi 20% secara idempoten.
 

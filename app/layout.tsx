@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NunoDrama — Drama Pilihan, Cerita Tanpa Jeda",
-  description: "Nikmati lima episode gratis, buka serial lengkap, dan dapatkan komisi dari program affiliate NunoDrama.",
+  title: "PintuMedia — Satu Pintu, Banyak Cerita",
+  description: "Lima episode gratis, kanal hiburan dalam satu tempat, dan program affiliate PintuMedia.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

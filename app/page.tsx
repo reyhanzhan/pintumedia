@@ -150,25 +150,27 @@ export default function Home() {
 
   const header = (
     <header className="site-header">
-      <button className="brand" onClick={goHome} aria-label="PintuMedia beranda">
-        <span className="brand-mark">P</span>
-        <span>PintuMedia</span>
-      </button>
-      <div className="header-actions">
-        <button className="platform-pill" onClick={() => setPlatformOpen(true)}>
-          <Image src={activePlatform.icon} alt="" width={27} height={27} />
-          <strong>{platform}</strong>
-          <ChevronDown size={14} />
+      <div className="site-header-inner">
+        <button className="brand" onClick={goHome} aria-label="PintuMedia beranda">
+          <span className="brand-mark">P</span>
+          <span>PintuMedia</span>
         </button>
-        <button className="language-pill" onClick={() => notify("Bahasa Indonesia aktif")}>
-          <Globe2 size={16} />
-          <strong>ID</strong>
-          <span>🇮🇩</span>
-          <ChevronDown size={13} />
-        </button>
-        <button className="search-button" aria-label="Cari drama" onClick={() => setSearchOpen(true)}>
-          <Search size={23} />
-        </button>
+        <div className="header-actions">
+          <button className="platform-pill" onClick={() => setPlatformOpen(true)}>
+            <Image src={activePlatform.icon} alt="" width={27} height={27} />
+            <strong>{platform}</strong>
+            <ChevronDown size={14} />
+          </button>
+          <button className="language-pill" onClick={() => notify("Bahasa Indonesia aktif")}>
+            <Globe2 size={16} />
+            <strong>ID</strong>
+            <span>🇮🇩</span>
+            <ChevronDown size={13} />
+          </button>
+          <button className="search-button" aria-label="Cari drama" onClick={() => setSearchOpen(true)}>
+            <Search size={23} />
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -237,7 +239,7 @@ export default function Home() {
         </section>
       )}
 
-      <footer className="site-footer"><span>Pintu Media</span><small>Gunakan hanya konten yang Anda miliki atau lisensikan secara sah.</small><span>© 2026</span></footer>
+      <footer className="site-footer"><div className="site-footer-inner"><span>Pintu Media</span><small>Gunakan hanya konten yang Anda miliki atau lisensikan secara sah.</small><span>© 2026</span></div></footer>
 
       {platformOpen && (
         <div className="modal-backdrop" onMouseDown={() => setPlatformOpen(false)}>

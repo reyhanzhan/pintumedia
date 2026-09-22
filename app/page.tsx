@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { Check, ChevronDown, ChevronRight, CirclePlay, Copy, Globe2, LockKeyhole, Play, Search, Volume2, X } from "lucide-react";
 
 const shows = [
@@ -9,8 +10,29 @@ const shows = [
   { title: "Rahasia Lantai 17", meta: "10 Episode", tone: "poster-cyan", number: "03" },
   { title: "Bukan Cinta Sementara", meta: "14 Episode", tone: "poster-gold", number: "04" },
 ];
-const platformNames = ["NunoMix","DramaBox","DramaVerse","DramaWave","FlexTV","FlickReels","FreeReels","GoodShort","iDrama","Melolo","NetShort","ShortMax","Stardust","Anime","AnyReel","MiniDrama","ShortTV","ReelSaga","LoveShots","PopReel","DramaGo","Shortime","ReelBox","MoboDrama","VivaShort","PocketTV","KissDrama","StarShort","MiniReel","JoyDrama","DramaPop","ReelTime","QuickDrama","SweetReel","StoryBox","TopShort","FunDrama","HotReel","DramaMini","ReelJoy","ShortPlus","DramaNow","MiniFlix","StoryReel","LoveReel","KDrama+","CDrama","AsiaShort","ReelOne","DramaHub","TinyDrama","FlashReel","ShortStory","DramaPlay","ReelWorld","PintuMedia"];
-const platformColors = ["#c28f56","#ff2768","#ff5a55","#ed20d7","#ff476b","#ffc315","#ff3d5b","#ef3442","#1ba8dd","#080808","#fa3f70","#101010","#ec4f9a","#37176f","#06c2c3"];
+const platforms = [
+  { name: "DramaBox", icon: "/platform-icons/dramabox.png" },
+  { name: "DramaVerse", icon: "/platform-icons/dramaverse.jpg" },
+  { name: "DramaWave", icon: "/platform-icons/dramawave.png" },
+  { name: "FlexTV", icon: "/platform-icons/flextv.png" },
+  { name: "FlickReels", icon: "/platform-icons/flickreels.png" },
+  { name: "FreeReels", icon: "/platform-icons/freereels.png" },
+  { name: "GoodShort", icon: "/platform-icons/goodshort.png" },
+  { name: "iDrama", icon: "/platform-icons/idrama.png" },
+  { name: "Melolo", icon: "/platform-icons/melolo.jpg" },
+  { name: "NetShort", icon: "/platform-icons/netshort.png" },
+  { name: "ShortMax", icon: "/platform-icons/shortmax.png" },
+  { name: "StardustTV", icon: "/platform-icons/stardust.png" },
+  { name: "PineDrama", icon: "/platform-icons/pinedrama.png" },
+  { name: "ReelShort", icon: "/platform-icons/reelshort.png" },
+  { name: "TopDrama", icon: "/platform-icons/topdrama.png" },
+  { name: "CubeTV", icon: "/platform-icons/cubetv.png" },
+  { name: "StarShort", icon: "/platform-icons/starshort.png" },
+  { name: "RapidTV", icon: "/platform-icons/rapidtv.png" },
+  { name: "DramaBite", icon: "/platform-icons/dramabite.png" },
+  { name: "ShortsWave", icon: "/platform-icons/shortswave.png" },
+  { name: "FlareFlow", icon: "/platform-icons/flareflow.png" },
+] as const;
 const episodeTitles = ["Kereta Terakhir","Nama di Tiket Lama","Hujan yang Sama","Pesan Tak Terkirim","Di Balik Pintu Kaca","Jadwal yang Berubah","Satu Kursi Kosong","Kota Setelah Tengah Malam","Janji di Peron Tiga","Pulang Bersama"];
 const plans = {
   series: { label: "Buka serial ini", meta: "Akses selamanya", price: "Rp25.000" },
@@ -29,7 +51,8 @@ export default function Home() {
   const [plan, setPlan] = useState<PlanId>("monthly");
   const [paymentMessage, setPaymentMessage] = useState("Pembayaran produksi memakai Midtrans atau Xendit dari server.");
   const [toast, setToast] = useState("");
-  const filteredPlatforms = useMemo(() => platformNames.filter((name) => name.toLowerCase().includes(platformQuery.toLowerCase())), [platformQuery]);
+  const filteredPlatforms = useMemo(() => platforms.filter((item) => item.name.toLowerCase().includes(platformQuery.toLowerCase())), [platformQuery]);
+  const activePlatform = platforms.find((item) => item.name === platform) ?? platforms[0];
 
   const notify = (message: string) => {
     setToast(message);
@@ -61,7 +84,7 @@ export default function Home() {
       <header className="site-header">
         <a className="brand" href="#top" aria-label="PintuMedia beranda"><span className="brand-mark">P</span><span>PINTU<span>MEDIA</span></span></a>
         <div className="header-actions">
-          <button className="platform-pill" onClick={() => setPlatformOpen(true)}><span>◇</span><strong>{platform}</strong><ChevronDown size={15} /></button>
+          <button className="platform-pill" onClick={() => setPlatformOpen(true)}><Image src={activePlatform.icon} alt="" width={27} height={27} /><strong>{platform}</strong><ChevronDown size={15} /></button>
           <button className="language-pill" onClick={() => notify("Bahasa Indonesia aktif")}><Globe2 size={17} /><strong>ID</strong><span>🇮🇩</span><ChevronDown size={14} /></button>
           <button className="icon-button" aria-label="Cari drama" onClick={() => notify("Pencarian judul siap digunakan")}><Search size={22} /></button>
         </div>
@@ -101,7 +124,7 @@ export default function Home() {
       <section className="legal-note"><strong>Catatan konten:</strong> gunakan hanya film, serial, poster, musik, dan subtitle yang Anda miliki atau lisensikan secara sah.</section>
       <footer className="site-footer"><a className="brand" href="#top"><span className="brand-mark">P</span><span>PINTU<span>MEDIA</span></span></a><p>© 2026 PintuMedia. Konsep platform streaming orisinal.</p><div><a href="#membership">Paket</a><a href="#affiliate">Affiliate</a><a href="#top">Ketentuan</a></div></footer>
 
-      {platformOpen && <div className="platform-overlay" onMouseDown={() => setPlatformOpen(false)}><section className="platform-picker" role="dialog" aria-modal="true" aria-label="Pilih platform" onMouseDown={(event) => event.stopPropagation()}><div className="picker-head"><label><Search size={24} /><input autoFocus value={platformQuery} onChange={(event) => setPlatformQuery(event.target.value)} placeholder="Cari platform..." /></label><button onClick={() => setPlatformOpen(false)} aria-label="Tutup"><X /></button></div><div className="picker-grid">{filteredPlatforms.map((name) => { const index = platformNames.indexOf(name); return <button key={name} className={platform === name ? "selected" : ""} onClick={() => { setPlatform(name); setPlatformOpen(false); notify("Berpindah ke " + name); }}><span style={{ background: platformColors[index % platformColors.length] }}>{name === "DramaBox" || name === "DramaWave" ? "▶" : name.slice(0, 2).toUpperCase()}</span><strong>{name}</strong>{platform === name && <i><Check size={13} /></i>}</button>; })}</div><footer><span>{filteredPlatforms.length === 56 ? "56 platform tersedia" : filteredPlatforms.length + " platform ditemukan"}</span><strong>◇ {platform}</strong></footer></section></div>}
+      {platformOpen && <div className="platform-overlay" onMouseDown={() => setPlatformOpen(false)}><section className="platform-picker" role="dialog" aria-modal="true" aria-label="Pilih platform" onMouseDown={(event) => event.stopPropagation()}><div className="picker-head"><label><Search size={24} /><input autoFocus value={platformQuery} onChange={(event) => setPlatformQuery(event.target.value)} placeholder="Cari platform..." /></label><button onClick={() => setPlatformOpen(false)} aria-label="Tutup"><X /></button></div><div className="picker-grid">{filteredPlatforms.map((item) => <button key={item.name} className={platform === item.name ? "selected" : ""} onClick={() => { setPlatform(item.name); setPlatformOpen(false); notify("Berpindah ke " + item.name); }}><Image src={item.icon} alt={"Logo " + item.name} width={58} height={58} /><strong>{item.name}</strong>{platform === item.name && <i><Check size={13} /></i>}</button>)}</div><footer><span>{platformQuery ? filteredPlatforms.length + " platform ditemukan" : platforms.length + " platform tersedia"}</span><strong><Image src={activePlatform.icon} alt="" width={28} height={28} /> {platform}</strong></footer></section></div>}
 
       {paywallOpen && <div className="platform-overlay" onMouseDown={() => setPaywallOpen(false)}><section className="paywall" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setPaywallOpen(false)}><X /></button><span className="section-kicker">Episode berikutnya menanti</span><h2>Buka semua episode</h2><p>Episode 1–5 gratis. Pilih akses yang paling pas untuk melanjutkan cerita.</p><div className="plan-list">{Object.entries(plans).map(([id, item]) => <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}><i>{plan === id && <Check size={14} />}</i><span><strong>{item.label}</strong><small>{item.meta}</small></span><b>{item.price}</b></button>)}</div><button className="primary-cta wide" onClick={startCheckout}>Lanjut ke pembayaran</button><button className="demo-access" onClick={() => { setUnlocked(true); setPaywallOpen(false); notify("Akses demo aktif — episode 6–10 terbuka"); }}>Aktifkan akses demo</button><small className="payment-message">{paymentMessage}</small></section></div>}
       {toast && <div className="toast">{toast}</div>}

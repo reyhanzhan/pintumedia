@@ -8,7 +8,6 @@ Fondasi platform streaming responsif dengan katalog multi-platform, lima episode
 - lima episode pertama terbuka;
 - episode 6–10 memunculkan paywall;
 - pilihan paket mingguan, bulanan, dan unlock per serial;
-- aktivasi akses demo untuk menguji alur;
 - dashboard affiliate dengan link referral dan simulasi komisi;
 - pencarian, login demo, dan navigasi seluler;
 - fondasi Next.js App Router untuk aplikasi produksi;
@@ -18,7 +17,11 @@ Fondasi platform streaming responsif dengan katalog multi-platform, lima episode
 
 ## Menjalankan demo Next.js
 
-Jalankan `npm install`, lalu `npm run dev`. Tanpa kredensial pembayaran, seluruh tampilan dan tombol “Aktifkan akses demo” tetap dapat diuji, tetapi tidak ada transaksi nyata.
+Jalankan `npm install`, lalu `npm run dev`. Tanpa kredensial pembayaran, katalog dan pratinjau QRIS tetap dapat diuji, tetapi episode premium tidak akan terbuka otomatis.
+
+## Deploy di Niagahoster/Hostinger
+
+Pilih **Web Apps → Buat website → Impor repository GitHub**, lalu gunakan repository `https://github.com/reyhanzhan/pintumedia` dan branch `main`. Pilih Node.js 22; build command `npm run build`; start command `npm run start`. Aplikasi tetap menampilkan katalog pratinjau jika variabel Supabase dan gateway pembayaran belum diisi.
 
 ## Mengaktifkan Supabase dan pembayaran
 

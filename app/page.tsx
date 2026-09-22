@@ -8,6 +8,8 @@ import {
   ArrowLeft,
   Check,
   Coffee,
+  ExternalLink,
+  Download,
   ChevronDown,
   ChevronRight,
   Globe2,
@@ -39,10 +41,9 @@ export default function Home() {
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const [watching, setWatching] = useState(false);
   const [episode, setEpisode] = useState(1);
-  const [unlocked, setUnlocked] = useState(false);
+  const unlocked = false;
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [plan, setPlan] = useState<PlanId>("monthly");
-  const [paymentMessage, setPaymentMessage] = useState("Pembayaran aman melalui Midtrans atau Xendit.");
   const [toast, setToast] = useState("");
   const [catalogResult, setCatalogResult] = useState<{ platform: string; dramas: Drama[]; error?: boolean }>({ platform: "DramaVerse", dramas: fallbackDramas });
   const catalogLoading = catalogResult.platform !== platform;
@@ -51,6 +52,13 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    if (!platformOpen && !searchOpen && !paywallOpen && !coffeeOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [platformOpen, searchOpen, paywallOpen, coffeeOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -128,30 +136,11 @@ export default function Home() {
     notify(`Episode ${value} siap diputar`);
   };
 
-  const startCheckout = async () => {
-    const email = window.prompt(t("Email untuk menerima akses:", "Email for your access:"));
-    if (!email) return;
-    setPaymentMessage(t("Membuat halaman pembayaran...", "Creating checkout..."));
-    try {
-      const referralCode = new URLSearchParams(window.location.search).get("ref") || undefined;
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: plan, email, referralCode }),
-      });
-      const data = (await response.json()) as { checkoutUrl?: string; error?: string };
-      if (!response.ok || !data.checkoutUrl) throw new Error(data.error || "Checkout gagal dibuat.");
-      window.location.href = data.checkoutUrl;
-    } catch (error) {
-      setPaymentMessage(error instanceof Error ? error.message : "Checkout gagal dibuat.");
-    }
-  };
-
   const header = (
     <header className="site-header">
       <div className="site-header-inner">
         <button className="brand" onClick={goHome} aria-label="PintuMedia beranda">
-          <span className="brand-mark">P</span>
+          <span className="brand-mark"><Image src="/brand/pintumedia-logo.jpg" alt="" width={54} height={54} priority /></span>
           <span>PintuMedia</span>
         </button>
         <div className="header-actions">
@@ -247,7 +236,7 @@ export default function Home() {
         </section>
       )}
 
-      <footer className="site-footer"><div className="site-footer-inner"><span>Pintu Media</span><small>{t("Katalog pratinjau · Video dan API belum terhubung.", "Preview catalog · Video and API not connected.")}</small><span>© 2026</span></div></footer>
+      <footer className="site-footer"><div className="site-footer-inner"><p>PintuMedia : <a href="https://github.com/reyhanzhan" target="_blank" rel="noopener noreferrer">By Reyhan <ExternalLink size={16} aria-hidden="true" /></a></p><span>© 2026</span></div></footer>
 
       {platformOpen && (
         <div className="modal-backdrop" onMouseDown={() => setPlatformOpen(false)}>
@@ -285,17 +274,21 @@ export default function Home() {
 
       {paywallOpen && (
         <div className="modal-backdrop" onMouseDown={() => setPaywallOpen(false)}>
-          <section className="paywall" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="modal-close" onClick={() => setPaywallOpen(false)}><X /></button>
+          <section className="paywall unlock-dialog" role="dialog" aria-modal="true" aria-labelledby="unlock-title" onMouseDown={(event) => event.stopPropagation()}>
+            <button autoFocus className="modal-close" aria-label={t("Tutup", "Close")} onClick={() => setPaywallOpen(false)}><X /></button>
             <small className="modal-kicker">{t("EPISODE BERIKUTNYA MENANTI", "YOUR NEXT EPISODE AWAITS")}</small>
-            <h2>{t("Buka semua episode", "Unlock all episodes")}</h2>
+            <h2 id="unlock-title">{t("Buka semua episode", "Unlock all episodes")}</h2>
             <p>{t("Episode 1–5 gratis. Pilih akses untuk melanjutkan cerita.", "Episodes 1–5 are free. Choose a plan to continue.")}</p>
             <div className="plan-list">
               {Object.entries(plans).map(([id, item]) => <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}><i>{plan === id && <Check size={14} />}</i><span><strong>{t(item.label, id === "series" ? "Unlock this drama" : id === "monthly" ? "Monthly plan" : "7-day plan")}</strong><small>{t(item.meta, id === "series" ? "Lifetime access" : "All dramas")}</small></span><b>{item.price}</b></button>)}
             </div>
-            <button className="watch-now wide" onClick={startCheckout}>{t("Lanjut ke pembayaran", "Continue to payment")}</button>
-            <button className="demo-access" onClick={() => { setUnlocked(true); setPaywallOpen(false); notify("Akses demo aktif — semua episode terbuka"); }}>{t("Aktifkan akses demo", "Enable demo access")}</button>
-            <small className="payment-message">{paymentMessage === "Pembayaran aman melalui Midtrans atau Xendit." ? t(paymentMessage, "Secure payment with Midtrans or Xendit.") : paymentMessage}</small>
+            <div className="qris-checkout">
+              <div className="qris-summary"><div><small>{t("QRIS · TOKOSWAG", "QRIS · TOKOSWAG")}</small><strong>{selectedDrama?.title}</strong></div><b>{plans[plan].price}</b></div>
+              <p className="qris-preview" role="status">{t("Pratinjau pembayaran. Video belum tersedia untuk pembelian; jangan transfer dulu.", "Payment preview. Videos are not available for purchase yet; please do not transfer funds.")}</p>
+              <Image className="qris-image" src="/payments/qris-tokoswag.jpg" alt={t("QRIS TOKOSWAG, NMID ID1025369150350", "TOKOSWAG QRIS, NMID ID1025369150350")} width={1135} height={1600} unoptimized />
+              <a className="qris-download" href="/payments/qris-tokoswag.jpg" download="PintuMedia-QRIS-TOKOSWAG.jpg"><Download size={17} />{t("Simpan gambar QRIS", "Save QRIS image")}</a>
+              <p className="qris-note">{t("QRIS ini atas nama TOKOSWAG. Menyimpan atau memindai QR tidak membuka episode. Akses diberikan setelah pembayaran terverifikasi.", "This QRIS belongs to TOKOSWAG. Saving or scanning the QR does not unlock episodes. Access is granted after payment verification.")}</p>
+            </div>
           </section>
         </div>
       )}

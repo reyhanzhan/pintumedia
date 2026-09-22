@@ -5,8 +5,9 @@ export const metadata: Metadata = {
   title: "PintuMedia — Streaming Drama Pendek",
   description: "Tonton drama pendek pilihan dengan lima episode pertama gratis di PintuMedia.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: [{ url: "/brand/pintumedia-logo.jpg", type: "image/jpeg" }],
+    shortcut: "/brand/pintumedia-logo.jpg",
+    apple: "/brand/pintumedia-logo.jpg",
   },
 };
 

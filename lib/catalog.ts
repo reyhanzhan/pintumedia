@@ -5,6 +5,8 @@ export type Drama = {
   poster: string;
   spriteX?: number;
   synopsis: string;
+  sourceProvider?: string;
+  sourceId?: string;
 };
 
 // The first six covers use the user-supplied reference image as a CSS sprite.

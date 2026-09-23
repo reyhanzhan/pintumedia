@@ -45,9 +45,12 @@ export default function Home() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [plan, setPlan] = useState<PlanId>("monthly");
   const [toast, setToast] = useState("");
-  const [catalogResult, setCatalogResult] = useState<{ platform: string; dramas: Drama[]; error?: boolean }>({ platform: "DramaVerse", dramas: fallbackDramas });
-  const catalogLoading = catalogResult.platform !== platform;
-  const catalog = useMemo(() => catalogResult.platform === platform ? catalogResult.dramas : [], [catalogResult, platform]);
+  const [playbackUrl, setPlaybackUrl] = useState("");
+  const [playbackLoading, setPlaybackLoading] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
+  const [catalogResult, setCatalogResult] = useState<{ platform: string; language: "id" | "en"; dramas: Drama[]; error?: boolean; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>({ platform: "DramaVerse", language: "id", dramas: fallbackDramas });
+  const catalogLoading = catalogResult.platform !== platform || catalogResult.language !== language;
+  const catalog = useMemo(() => catalogResult.platform === platform && catalogResult.language === language ? catalogResult.dramas : [], [catalogResult, platform, language]);
 
   useEffect(() => {
     document.documentElement.lang = language;
@@ -63,19 +66,19 @@ export default function Home() {
   useEffect(() => {
     const controller = new AbortController();
     const slug = platforms.find((item) => item.name === platform)?.slug ?? "dramaverse";
-    fetch(`/api/catalog?platform=${encodeURIComponent(slug)}`, { signal: controller.signal, headers: { Accept: "application/json" } })
+    fetch(`/api/catalog?platform=${encodeURIComponent(slug)}&language=${language}`, { signal: controller.signal, headers: { Accept: "application/json" } })
       .then(async (response) => {
         if (!response.ok) throw new Error("Catalog unavailable");
-        return response.json() as Promise<{ dramas: Drama[] }>;
+        return response.json() as Promise<{ dramas: Drama[]; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>;
       })
       .then((payload) => {
-        if (!controller.signal.aborted) setCatalogResult({ platform, dramas: payload.dramas });
+        if (!controller.signal.aborted) setCatalogResult({ platform, language, dramas: payload.dramas, upstreamUnavailable: payload.upstreamUnavailable, externalOnly: payload.externalOnly, integrationUnavailable: payload.integrationUnavailable });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setCatalogResult({ platform, dramas: [], error: true });
+        if (!controller.signal.aborted) setCatalogResult({ platform, language, dramas: [], error: true });
       });
     return () => controller.abort();
-  }, [platform]);
+  }, [platform, language]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -87,6 +90,27 @@ export default function Home() {
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
   }, []);
+
+  useEffect(() => {
+    setPlaybackUrl("");
+    setPlaybackError("");
+    setPlaybackLoading(false);
+    if (!watching || !selectedDrama?.sourceProvider || !selectedDrama.sourceId) return;
+    if (episode > 5 && !unlocked) return;
+    const controller = new AbortController();
+    setPlaybackLoading(true);
+    const query = new URLSearchParams({ provider: selectedDrama.sourceProvider, id: selectedDrama.sourceId, episode: String(episode) });
+    fetch(`/api/nunodrama/play?${query}`, { signal: controller.signal, headers: { Accept: "application/json" } })
+      .then(async (response) => {
+        const payload = await response.json() as { url?: string; error?: string };
+        if (!response.ok || !payload.url) throw new Error(payload.error || "Video tidak tersedia");
+        return payload.url;
+      })
+      .then((url) => { if (!controller.signal.aborted) setPlaybackUrl(url); })
+      .catch((error) => { if (!controller.signal.aborted) setPlaybackError(error instanceof Error ? error.message : "Video tidak tersedia"); })
+      .finally(() => { if (!controller.signal.aborted) setPlaybackLoading(false); });
+    return () => controller.abort();
+  }, [watching, selectedDrama, episode, unlocked]);
 
   const activePlatform = platforms.find((item) => item.name === platform) ?? platforms[0];
   const filteredPlatforms = useMemo(
@@ -151,14 +175,15 @@ export default function Home() {
           <div className="language-control">
             <button className="language-pill" aria-label={t("Pilih bahasa", "Choose language")} aria-expanded={languageOpen} onClick={() => setLanguageOpen(!languageOpen)}>
               <Globe2 size={20} /><strong>{language.toUpperCase()}</strong>
-              <span className={language === "en" ? "flag-en" : ""} aria-hidden="true" />
-              <ChevronDown size={13} />
+              <span className={`language-flag ${language === "id" ? "flag-id" : "flag-us"}`} aria-hidden="true" />
+              <ChevronDown className={languageOpen ? "language-chevron open" : "language-chevron"} size={14} />
             </button>
             {languageOpen && <>
               <button className="language-dismiss" aria-label={t("Tutup pilihan bahasa", "Close language menu")} onClick={() => setLanguageOpen(false)} />
-              <div className="language-menu">
-                {(["id", "en"] as const).map((code) => <button key={code} aria-pressed={language === code} onClick={() => { setLanguage(code); setLanguageOpen(false); }}>
-                  <span>{code === "id" ? "Bahasa Indonesia" : "English"}</span>{language === code && <Check size={16} />}
+              <div className="language-menu" role="menu">
+                <div className="language-menu-title">BAHASA / LANGUAGE</div>
+                {(["id", "en"] as const).map((code) => <button role="menuitemradio" key={code} aria-checked={language === code} onClick={() => { setLanguage(code); setLanguageOpen(false); }}>
+                  <span className="language-option"><span className={`language-option-flag ${code === "id" ? "flag-id" : "flag-us"}`} aria-hidden="true" /><strong>{code === "id" ? "Indonesia" : "English"}</strong></span>{language === code && <Check size={18} />}
                 </button>)}
               </div>
             </>}
@@ -178,6 +203,9 @@ export default function Home() {
       {!selectedDrama && (
         <div className="catalog-page" aria-busy={catalogLoading}>
           {catalogLoading ? <p className="catalog-empty" role="status">{t("Memuat drama...", "Loading dramas...")}</p> : !catalog.length && <p className="catalog-empty" role="status">{catalogResult.error ? t("Katalog belum dapat dimuat. Silakan coba lagi nanti.", "The catalog could not be loaded. Please try again later.") : t(`Belum ada drama untuk ${platform}.`, `No dramas available for ${platform} yet.`)}</p>}
+          {!catalogLoading && catalogResult.upstreamUnavailable && <p className="catalog-notice" role="status">{t("API DramaBox sedang bermasalah. Untuk sementara ditampilkan katalog contoh.", "The DramaBox API is currently unavailable. A sample catalog is shown for now.")}</p>}
+          {!catalogLoading && catalogResult.externalOnly && <p className="catalog-notice" role="status">{t("Bstation memakai tautan resmi. Tambahkan hanya video yang Anda punya izin untuk didistribusikan.", "Bstation uses an official handoff. Add only videos you are licensed to distribute.")} <a href="https://www.bilibili.tv/id" target="_blank" rel="noopener noreferrer">{t("Buka Bstation", "Open Bstation")}</a></p>}
+          {!catalogLoading && catalogResult.integrationUnavailable && <p className="catalog-notice" role="status">{t("Provider ini belum terhubung. Isi DRAMABOS_API_KEY dan konfirmasi lisensi konten di environment server.", "This provider is not connected yet. Set DRAMABOS_API_KEY and confirm content licensing in the server environment.")}</p>}
           {!!catalog.length && <DramaShelf title={t("Terbaru", "Latest")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog} onSelect={openDrama} />}
           {catalog.length > 12 && <DramaShelf title={t("Untuk Anda", "For you")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog.slice(12)} onSelect={openDrama} />}
         </div>
@@ -213,11 +241,12 @@ export default function Home() {
           </div>
           <div className="watch-layout">
             <div className="video-shell">
-              <div className="video-poster"><Poster drama={selectedDrama} /></div>
-              <div className="video-overlay" />
-              <button className="video-play" onClick={() => notify(`Memutar episode ${episode} (demo)`)}><Play fill="currentColor" /></button>
-              <div className="video-caption"><small>EPISODE {episode}</small><strong>{selectedDrama.title}</strong></div>
-              <div className="video-progress"><i /><span>00:00 / 02:18</span></div>
+              {playbackUrl ? <video className="nuno-video" src={playbackUrl} controls autoPlay playsInline preload="metadata" onError={() => setPlaybackError(t("Video gagal dimuat. Coba episode lain.", "The video could not be loaded. Try another episode."))} /> : <>
+                <div className="video-poster"><Poster drama={selectedDrama} /></div>
+                <div className="video-overlay" />
+                <button className="video-play" disabled={playbackLoading} onClick={() => notify(playbackLoading ? t("Menyiapkan video...", "Preparing video...") : t("Video belum tersedia", "Video is not available"))}>{playbackLoading ? <span className="video-spinner" /> : <Play fill="currentColor" />}</button>
+                <div className="video-caption"><small>EPISODE {episode}</small><strong>{selectedDrama.title}</strong>{playbackError && <em>{playbackError}</em>}</div>
+              </>}
             </div>
             <aside className="episode-list">
               <div><strong>{t("Daftar Episode", "Episodes")}</strong><small>{selectedDrama.episodes} episode</small></div>

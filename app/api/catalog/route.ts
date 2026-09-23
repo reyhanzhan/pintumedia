@@ -26,9 +26,14 @@ export async function GET(request: Request) {
     try {
       const dramas = await fetchNunoCatalog(platform, language);
       return NextResponse.json({ source: "nunodrama-api", platform, dramas }, { headers: { "Cache-Control": "public, s-maxage=180, stale-while-revalidate=300" } });
-    } catch {
-      return NextResponse.json({ source: "preview-fallback", platform, dramas: fallbackDramas, upstreamUnavailable: true, upstream: "nunodrama" }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "NunoDrama API tidak tersedia.";
+      return NextResponse.json({ source: "upstream-unavailable", platform, dramas: [], upstreamUnavailable: true, upstream: "nunodrama", message }, { headers: { "Cache-Control": "no-store" } });
     }
+  }
+
+  if (process.env.NUNODRAMA_API_TOKEN && (platform === "drakor" || platform === "reellife")) {
+    return NextResponse.json({ source: "not-in-nunodrama-api", platform, dramas: [], integrationUnavailable: true });
   }
 
   if (isDramaBosProvider(platform) && process.env.DRAMABOS_API_KEY && process.env.DRAMABOS_CONTENT_LICENSE_CONFIRMED === "true") {
@@ -36,7 +41,7 @@ export async function GET(request: Request) {
       const dramas = await fetchDramaBosCatalog(platform, language);
       return NextResponse.json({ source: "dramabos-api", platform, dramas }, { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } });
     } catch {
-      return NextResponse.json({ source: "preview-fallback", platform, dramas: fallbackDramas, upstreamUnavailable: true }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ source: "upstream-unavailable", platform, dramas: [], upstreamUnavailable: true }, { headers: { "Cache-Control": "no-store" } });
     }
   }
 
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         source: "preview-fallback",
         platform,
-        dramas: fallbackDramas,
+        dramas: [],
         upstreamUnavailable: true,
       }, { headers: { "Cache-Control": "no-store" } });
     }

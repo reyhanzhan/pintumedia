@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import Hls from "hls.js";
 import { platforms } from "../lib/platforms";
-import { dramas as fallbackDramas, type Drama } from "../lib/catalog";
-import { useEffect, useMemo, useState } from "react";
+import type { Drama } from "../lib/catalog";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -48,7 +49,7 @@ export default function Home() {
   const [playbackUrl, setPlaybackUrl] = useState("");
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [playbackError, setPlaybackError] = useState("");
-  const [catalogResult, setCatalogResult] = useState<{ platform: string; language: "id" | "en"; dramas: Drama[]; error?: boolean; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>({ platform: "DramaVerse", language: "id", dramas: fallbackDramas });
+  const [catalogResult, setCatalogResult] = useState<{ platform: string; language: "id" | "en"; dramas: Drama[]; error?: boolean; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>({ platform: "", language: "id", dramas: [] });
   const catalogLoading = catalogResult.platform !== platform || catalogResult.language !== language;
   const catalog = useMemo(() => catalogResult.platform === platform && catalogResult.language === language ? catalogResult.dramas : [], [catalogResult, platform, language]);
 
@@ -203,9 +204,9 @@ export default function Home() {
       {!selectedDrama && (
         <div className="catalog-page" aria-busy={catalogLoading}>
           {catalogLoading ? <p className="catalog-empty" role="status">{t("Memuat drama...", "Loading dramas...")}</p> : !catalog.length && <p className="catalog-empty" role="status">{catalogResult.error ? t("Katalog belum dapat dimuat. Silakan coba lagi nanti.", "The catalog could not be loaded. Please try again later.") : t(`Belum ada drama untuk ${platform}.`, `No dramas available for ${platform} yet.`)}</p>}
-          {!catalogLoading && catalogResult.upstreamUnavailable && <p className="catalog-notice" role="status">{t("API DramaBox sedang bermasalah. Untuk sementara ditampilkan katalog contoh.", "The DramaBox API is currently unavailable. A sample catalog is shown for now.")}</p>}
+          {!catalogLoading && catalogResult.upstreamUnavailable && <p className="catalog-notice" role="status">{t(`API ${platform} sedang tidak merespons. Katalog contoh tidak ditampilkan agar tidak menyesatkan. Silakan coba lagi.`, `The ${platform} API is not responding. A sample catalog is not shown because it would be misleading. Please try again.`)}</p>}
           {!catalogLoading && catalogResult.externalOnly && <p className="catalog-notice" role="status">{t("Bstation memakai tautan resmi. Tambahkan hanya video yang Anda punya izin untuk didistribusikan.", "Bstation uses an official handoff. Add only videos you are licensed to distribute.")} <a href="https://www.bilibili.tv/id" target="_blank" rel="noopener noreferrer">{t("Buka Bstation", "Open Bstation")}</a></p>}
-          {!catalogLoading && catalogResult.integrationUnavailable && <p className="catalog-notice" role="status">{t("Provider ini belum terhubung. Isi DRAMABOS_API_KEY dan konfirmasi lisensi konten di environment server.", "This provider is not connected yet. Set DRAMABOS_API_KEY and confirm content licensing in the server environment.")}</p>}
+          {!catalogLoading && catalogResult.integrationUnavailable && <p className="catalog-notice" role="status">{t(`${platform} ada di picker referensi, tetapi belum tersedia di paket API NunoDrama yang aktif.`, `${platform} appears in the reference picker but is not available in the active NunoDrama API package.`)}</p>}
           {!!catalog.length && <DramaShelf title={t("Terbaru", "Latest")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog} onSelect={openDrama} />}
           {catalog.length > 12 && <DramaShelf title={t("Untuk Anda", "For you")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog.slice(12)} onSelect={openDrama} />}
         </div>
@@ -217,11 +218,11 @@ export default function Home() {
           <div className="detail-layout">
             <div className="detail-poster">
               <Poster drama={selectedDrama} />
-              {selectedDrama.spriteX === undefined && <span className="detail-badge">{selectedDrama.episodes} EP</span>}
+              {selectedDrama.spriteX === undefined && <span className="detail-badge">{selectedDrama.episodes > 0 ? `${selectedDrama.episodes} EP` : t("Episode tersedia", "Episodes available")}</span>}
             </div>
             <div className="detail-copy">
               <h1>{selectedDrama.title}</h1>
-              <div className="detail-meta"><Play size={15} /> {selectedDrama.episodes} Episode <b>{platform.toUpperCase()}</b></div>
+              <div className="detail-meta"><Play size={15} /> {selectedDrama.episodes > 0 ? `${selectedDrama.episodes} Episode` : t("Jumlah episode belum dilaporkan API", "Episode count not reported by the API")} <b>{platform.toUpperCase()}</b></div>
               <article>
                 <h2>{t("Sinopsis", "Synopsis")}</h2>
                 <p>{selectedDrama.synopsis || t("Sinopsis belum tersedia.", "Synopsis is not available yet.")}</p>
@@ -241,7 +242,7 @@ export default function Home() {
           </div>
           <div className="watch-layout">
             <div className="video-shell">
-              {playbackUrl ? <video className="nuno-video" src={playbackUrl} controls autoPlay playsInline preload="metadata" onError={() => setPlaybackError(t("Video gagal dimuat. Coba episode lain.", "The video could not be loaded. Try another episode."))} /> : <>
+              {playbackUrl ? <HlsVideo src={playbackUrl} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
                 <div className="video-poster"><Poster drama={selectedDrama} /></div>
                 <div className="video-overlay" />
                 <button className="video-play" disabled={playbackLoading} onClick={() => notify(playbackLoading ? t("Menyiapkan video...", "Preparing video...") : t("Video belum tersedia", "Video is not available"))}>{playbackLoading ? <span className="video-spinner" /> : <Play fill="currentColor" />}</button>
@@ -250,7 +251,7 @@ export default function Home() {
             </div>
             <aside className="episode-list">
               <div><strong>{t("Daftar Episode", "Episodes")}</strong><small>{selectedDrama.episodes} episode</small></div>
-              {Array.from({ length: selectedDrama.episodes }, (_, index) => index + 1).map((number) => {
+              {Array.from({ length: Math.max(selectedDrama.episodes, 1) }, (_, index) => index + 1).map((number) => {
                 const locked = number > 5 && !unlocked;
                 return (
                   <button key={number} className={episode === number ? "active" : ""} onClick={() => chooseEpisode(number)}>
@@ -265,7 +266,7 @@ export default function Home() {
         </section>
       )}
 
-      <footer className="site-footer"><div className="site-footer-inner"><p>PintuMedia : <a href="https://github.com/reyhanzhan" target="_blank" rel="noopener noreferrer">By Reyhan <ExternalLink size={16} aria-hidden="true" /></a></p><span>© 2026</span></div></footer>
+      <footer className="site-footer"><div className="site-footer-inner"><p>PintuMedia : <a href="https://dedemultimedia.store/" target="_blank" rel="noopener noreferrer">By DedeMultimedia <ExternalLink size={16} aria-hidden="true" /></a></p><span>© 2026</span></div></footer>
 
       {platformOpen && (
         <div className="modal-backdrop" onMouseDown={() => setPlatformOpen(false)}>
@@ -339,6 +340,7 @@ export default function Home() {
 }
 
 function Poster({ drama }: { drama: Drama }) {
+  const [failed, setFailed] = useState(false);
   if (drama.spriteX !== undefined) {
     return <span className="poster-crop" role="img" aria-label={drama.title} style={{
       backgroundImage: `url("${drama.poster}")`,
@@ -346,7 +348,36 @@ function Poster({ drama }: { drama: Drama }) {
       backgroundPosition: `${drama.spriteX / (1861 - 228) * 100}% ${291 / (871 - 342) * 100}%`,
     }} />;
   }
-  return <Image src={drama.poster} alt={drama.title} fill sizes="(max-width: 600px) 31vw, (max-width: 1080px) 23vw, 13vw" />;
+  if (failed || !drama.poster) {
+    return <span className="poster-fallback" role="img" aria-label={drama.title}><b>{drama.title.charAt(0).toUpperCase()}</b><small>PintuMedia</small></span>;
+  }
+  const bypassOptimizer = /^https?:\/\//i.test(drama.poster) || drama.poster.startsWith("/api/nunodrama/image");
+  return <Image src={drama.poster} alt={drama.title} fill sizes="(max-width: 600px) 31vw, (max-width: 1080px) 23vw, 13vw" unoptimized={bypassOptimizer} onError={() => setFailed(true)} />;
+}
+
+function HlsVideo({ src, onError }: { src: string; onError: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (/\.m3u8(?:\?|$)/i.test(src) && Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { void video.play().catch(() => undefined); });
+      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) onErrorRef.current(); });
+      return () => hls.destroy();
+    }
+    video.src = src;
+    void video.play().catch(() => undefined);
+    return () => { video.removeAttribute("src"); video.load(); };
+  }, [src]);
+
+  return <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="metadata" onError={() => onErrorRef.current()} />;
 }
 
 function DramaShelf({ title, moreLabel, lessLabel, dramas: shelfDramas, onSelect }: { title: string; moreLabel: string; lessLabel: string; dramas: readonly Drama[]; onSelect: (drama: Drama) => void }) {
@@ -359,7 +390,7 @@ function DramaShelf({ title, moreLabel, lessLabel, dramas: shelfDramas, onSelect
           <button className="drama-card" key={drama.id} onClick={() => onSelect(drama)}>
             <span className="poster-wrap">
               <Poster drama={drama} />
-              {drama.spriteX === undefined && <i>{drama.episodes} EP</i>}
+              {drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}
               <em><Play size={23} fill="currentColor" /></em>
             </span>
             <strong>{drama.title}</strong>

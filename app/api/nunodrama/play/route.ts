@@ -12,7 +12,10 @@ export async function GET(request: Request) {
 
   try {
     const playback = await fetchNunoPlayback(provider, sourceId, episode);
-    return NextResponse.json(playback, { headers: { "Cache-Control": "private, no-store" } });
+    const url = provider === "bstation"
+      ? `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`
+      : playback.url;
+    return NextResponse.json({ ...playback, url }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Playback NunoDrama tidak tersedia.";
     return NextResponse.json({ error: message }, { status: 502 });

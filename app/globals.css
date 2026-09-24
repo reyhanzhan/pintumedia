@@ -222,6 +222,28 @@ button { color: inherit; }
 .site-footer-inner a:hover { color: #42d3f6; }
 .site-footer-inner > span { font-size: 18px; font-weight: 600; }
 
+.profile-page { width: var(--content-width); min-height: calc(100vh - 88px); margin: 0 auto; padding: 58px 0 90px; }
+.profile-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
+.profile-heading h1 { margin: 3px 0 0; font-size: clamp(30px, 2.4vw, 42px); letter-spacing: -.03em; }
+.profile-kicker { color: #13bde9; font-size: 12px; font-weight: 800; letter-spacing: .16em; }
+.profile-back { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer; }
+.profile-card-list { width: min(100%, 720px); display: grid; gap: 16px; }
+.profile-menu-card { min-height: 80px; display: grid; grid-template-columns: 55px 1fr 25px; align-items: center; gap: 16px; padding: 12px 20px; border: 1px solid rgba(191, 173, 210, .45); border-radius: 12px; background: #332d3c; color: #eeeaf2; text-align: left; cursor: pointer; }
+.profile-menu-card:hover { border-color: #14bce9; background: #3b3547; }
+.profile-menu-card strong { font-size: 20px; }
+.profile-menu-icon { width: 55px; height: 55px; display: grid; place-items: center; border-radius: 18px; background: #5b5366; color: #e3ddea; }
+.profile-help-wrap { display: grid; gap: 8px; }
+.profile-help-card { cursor: default; }
+.profile-help-actions { display: flex; gap: 9px; padding-left: 71px; }
+.profile-help-actions a { padding: 8px 13px; border-radius: 999px; background: #1b92c5; color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; }
+.profile-help-actions a:last-child { background: #475cbd; }
+.affiliate-banner { width: min(100%, 720px); min-height: 220px; display: grid; place-items: center; gap: 7px; margin-top: 35px; padding: 30px; border: 1px solid rgba(255,255,255,.1); border-radius: 20px; background: radial-gradient(circle at 50% 18%, #3e254d, #211b27 70%); color: #fff; text-align: center; }
+.affiliate-banner svg { color: #f3ae32; }
+.affiliate-banner strong { max-width: 560px; font-size: 23px; line-height: 1.25; }
+.affiliate-banner small { color: #b8aeba; }
+.affiliate-coins { color: #f5b32e; letter-spacing: .5em; }
+.profile-bottom-nav { display: none; }
+
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 14px; background: rgba(1, 7, 15, 0.82); backdrop-filter: blur(9px); }
 .platform-picker { position: relative; display: flex; flex-direction: column; width: min(980px, 95vw); max-height: 82dvh; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.035); border-radius: 23px; background: #1d2939; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.38); }
 .picker-head { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 16px; padding: 20px 22px 12px; }
@@ -303,6 +325,19 @@ button { color: inherit; }
   .platform-pill { height: 36px; padding: 0 8px; }
   .platform-pill strong { display: none; }
   .catalog-page { padding: 43px 0 52px; }
+  .profile-page { width: 100%; min-height: calc(100dvh - 62px); padding: 28px 18px 92px; background: #211b27; }
+  .profile-heading { margin-bottom: 26px; }
+  .profile-heading h1 { font-size: 29px; }
+  .profile-kicker { font-size: 10px; }
+  .profile-card-list { gap: 15px; }
+  .profile-menu-card { min-height: 80px; grid-template-columns: 55px 1fr 22px; gap: 16px; padding: 11px 18px; border-radius: 10px; }
+  .profile-menu-card strong { font-size: 18px; }
+  .profile-help-actions { padding-left: 71px; }
+  .affiliate-banner { min-height: 190px; margin-top: 28px; padding: 22px; }
+  .affiliate-banner strong { font-size: 19px; }
+  .profile-bottom-nav { position: fixed; z-index: 42; left: 0; right: 0; bottom: 0; height: 67px; display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid rgba(255,255,255,.12); background: #17121c; }
+  .profile-bottom-nav button { display: grid; place-items: center; gap: 3px; border: 0; border-right: 1px solid rgba(255,255,255,.1); background: transparent; color: #b5aec0; font-size: 12px; cursor: pointer; }
+  .profile-bottom-nav button.active { color: #e60073; }
   .drama-section { margin-bottom: 36px; }
   .section-head { margin-bottom: 13px; }
   .section-head h2 { font-size: 20px; }

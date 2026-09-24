@@ -17,6 +17,13 @@ import {
   LockKeyhole,
   Menu,
   Play,
+  UserRound,
+  History,
+  ListMusic,
+  Smartphone,
+  Share2,
+  LifeBuoy,
+  ArrowRight,
   Search,
   ArrowUpDown,
   X,
@@ -34,6 +41,7 @@ export default function Home() {
   const [language, setLanguage] = useState<"id" | "en">("id");
   const [languageOpen, setLanguageOpen] = useState(false);
   const [coffeeOpen, setCoffeeOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const t = (id: string, en: string) => language === "id" ? id : en;
   const donationUrl = process.env.NEXT_PUBLIC_DONATION_URL;
   const [platform, setPlatform] = useState("DramaVerse");
@@ -67,11 +75,11 @@ export default function Home() {
   }, [language]);
 
   useEffect(() => {
-    if (!platformOpen && !searchOpen && !paywallOpen && !coffeeOpen && !watching) return;
+    if (!platformOpen && !searchOpen && !paywallOpen && !coffeeOpen && !watching && !profileOpen) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [platformOpen, searchOpen, paywallOpen, coffeeOpen, watching]);
+  }, [platformOpen, searchOpen, paywallOpen, coffeeOpen, watching, profileOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,7 +102,7 @@ export default function Home() {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlatformOpen(false); setSearchOpen(false); setPaywallOpen(false);
-        setLanguageOpen(false); setCoffeeOpen(false); setEpisodeMenuOpen(false);
+        setLanguageOpen(false); setCoffeeOpen(false); setEpisodeMenuOpen(false); setProfileOpen(false);
       }
     };
     document.addEventListener("keydown", close);
@@ -208,6 +216,15 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const openProfile = () => {
+    setSelectedDrama(null);
+    setWatching(false);
+    setPlatformOpen(false);
+    setSearchOpen(false);
+    setProfileOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const openPlatformPicker = () => {
     let recent: string[] = [];
     try {
@@ -286,6 +303,9 @@ export default function Home() {
           <button className="search-button" aria-label={t("Cari drama", "Search dramas")} onClick={() => setSearchOpen(true)}>
             <Search size={23} />
           </button>
+          <button className="profile-button" aria-label={t("Buka profil", "Open profile")} aria-pressed={profileOpen} onClick={openProfile}>
+            <UserRound size={23} />
+          </button>
         </div>
       </div>
     </header>
@@ -295,7 +315,9 @@ export default function Home() {
     <main>
       {header}
 
-      {!selectedDrama && (
+      {profileOpen && !selectedDrama && <ProfilePage t={t} onBack={() => { setProfileOpen(false); goHome(); }} />}
+
+      {!profileOpen && !selectedDrama && (
         <div className="catalog-page" aria-busy={catalogLoading}>
           {catalogLoading ? <p className="catalog-empty" role="status">{t("Memuat drama...", "Loading dramas...")}</p> : !catalog.length && <p className="catalog-empty" role="status">{catalogResult.error ? t("Katalog belum dapat dimuat. Silakan coba lagi nanti.", "The catalog could not be loaded. Please try again later.") : t(`Belum ada drama untuk ${platform}.`, `No dramas available for ${platform} yet.`)}</p>}
           {!catalogLoading && catalogResult.upstreamUnavailable && <p className="catalog-notice" role="status">{t(`API ${platform} sedang tidak merespons. Katalog contoh tidak ditampilkan agar tidak menyesatkan. Silakan coba lagi.`, `The ${platform} API is not responding. A sample catalog is not shown because it would be misleading. Please try again.`)}</p>}
@@ -306,7 +328,7 @@ export default function Home() {
         </div>
       )}
 
-      {selectedDrama && !watching && (
+      {!profileOpen && selectedDrama && !watching && (
         <section className="detail-page">
           <button className="back-button" onClick={goHome}><ArrowLeft size={18} /> {t("Kembali", "Back")}</button>
           <div className="detail-layout">
@@ -327,7 +349,7 @@ export default function Home() {
         </section>
       )}
 
-      {selectedDrama && watching && (
+      {!profileOpen && selectedDrama && watching && (
         <section className="watch-page">
           <div className="watch-stage">
             <div className="watch-toolbar">
@@ -444,6 +466,30 @@ export default function Home() {
       {toast && <div className="toast">{toast}</div>}
     </main>
   );
+}
+
+function ProfilePage({ t, onBack }: { t: (id: string, en: string) => string; onBack: () => void }) {
+  const helpMessage = encodeURIComponent("Halo PintuMedia, saya butuh bantuan.");
+  const whatsappUrl = `https://wa.me/?text=${helpMessage}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent("https://mediumpurple-lyrebird-983556.hostingersite.com")}&text=${helpMessage}`;
+  const items = [
+    { label: t("Riwayat Tontonan", "Watch History"), icon: History, action: () => undefined },
+    { label: t("Daftar Favorit", "Favorites"), icon: ListMusic, action: () => undefined },
+    { label: t("Download App", "Download App"), icon: Smartphone, action: () => undefined },
+    { label: t("Program Affiliate", "Affiliate Program"), icon: Share2, action: () => undefined },
+  ];
+  return <section className="profile-page" aria-label={t("Profil", "Profile")}>
+    <div className="profile-heading"><button className="profile-back" onClick={onBack} aria-label={t("Kembali", "Back")}><ArrowLeft size={24} /></button><div><span className="profile-kicker">PINTUMEDIA</span><h1>{t("Profil", "Profile")}</h1></div></div>
+    <div className="profile-card-list">
+      {items.map(({ label, icon: Icon, action }) => <button className="profile-menu-card" key={label} onClick={action}><span className="profile-menu-icon"><Icon size={25} /></span><strong>{label}</strong><ArrowRight size={22} /></button>)}
+      <div className="profile-help-wrap">
+        <div className="profile-menu-card profile-help-card"><span className="profile-menu-icon"><LifeBuoy size={25} /></span><strong>{t("Bantuan", "Help")}</strong><ArrowRight size={22} /></div>
+        <div className="profile-help-actions"><a href={whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp CS</a><a href={telegramUrl} target="_blank" rel="noopener noreferrer">Telegram CS</a></div>
+      </div>
+    </div>
+    <div className="affiliate-banner"><span className="affiliate-coins">✦　✧　✦</span><Share2 size={54} /><strong>{t("Bagikan link, dapatkan komisi dari rumah", "Share your link and earn from home")}</strong><small>{t("Program Affiliate PintuMedia", "PintuMedia Affiliate Program")}</small></div>
+    <nav className="profile-bottom-nav" aria-label={t("Navigasi utama", "Main navigation")}><button onClick={onBack}><ListMusic size={22} /><span>{t("Koleksi", "Collection")}</span></button><button className="active" aria-current="page"><UserRound size={22} /><span>{t("Profil", "Profile")}</span></button></nav>
+  </section>;
 }
 
 function Poster({ drama }: { drama: Drama }) {

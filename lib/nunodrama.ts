@@ -205,14 +205,17 @@ export function supportsNunoProvider(provider: string) {
   return !!NUNO_PROVIDERS[provider];
 }
 
-export async function fetchNunoCatalog(provider: string, language: "in" | "en") {
+export async function fetchNunoCatalog(provider: string, language: "in" | "en", page = 1) {
   const config = NUNO_PROVIDERS[provider];
   if (!config) throw new Error(`Provider ${provider} belum didukung adapter NunoDrama.`);
 
   // Most providers expose a token-scoped language setter. Ignore failures for
   // providers that do not implement it and still request the feed.
   await requestJson(`/api/${config.apiSlug}/set_language`, { lang: language }).catch(() => undefined);
-  const payload = await requestJson(`/api/${config.apiSlug}/${config.feed}`, config.feedParams);
+  const payload = await requestJson(`/api/${config.apiSlug}/${config.feed}`, {
+    ...config.feedParams,
+    page: String(page),
+  });
   const catalog = parseCatalog(payload, provider);
   if (!catalog.length) throw new Error("NunoDrama API returned an empty catalog");
   return catalog;

@@ -18,14 +18,16 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const platform = requestUrl.searchParams.get("platform") ?? "dramaverse";
   const language = requestUrl.searchParams.get("language") === "en" ? "en" : "in";
+  const requestedPage = Number(requestUrl.searchParams.get("page") ?? "1");
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100) : 1;
   if (!platforms.some((item) => item.slug === platform)) {
     return NextResponse.json({ error: "Unknown platform" }, { status: 400 });
   }
 
   if (supportsNunoProvider(platform) && process.env.NUNODRAMA_API_TOKEN) {
     try {
-      const dramas = await fetchNunoCatalog(platform, language);
-      return NextResponse.json({ source: "nunodrama-api", platform, dramas }, { headers: { "Cache-Control": "public, s-maxage=180, stale-while-revalidate=300" } });
+      const dramas = await fetchNunoCatalog(platform, language, page);
+      return NextResponse.json({ source: "nunodrama-api", platform, page, hasMore: dramas.length > 0, dramas }, { headers: { "Cache-Control": "public, s-maxage=180, stale-while-revalidate=300" } });
     } catch (error) {
       const message = error instanceof Error ? error.message : "NunoDrama API tidak tersedia.";
       return NextResponse.json({ source: "upstream-unavailable", platform, dramas: [], upstreamUnavailable: true, upstream: "nunodrama", message }, { headers: { "Cache-Control": "no-store" } });
@@ -37,6 +39,7 @@ export async function GET(request: Request) {
   }
 
   if (isDramaBosProvider(platform) && process.env.DRAMABOS_API_KEY && process.env.DRAMABOS_CONTENT_LICENSE_CONFIRMED === "true") {
+    if (page > 1) return NextResponse.json({ source: "dramabos-api", platform, page, hasMore: false, dramas: [] });
     try {
       const dramas = await fetchDramaBosCatalog(platform, language);
       return NextResponse.json({ source: "dramabos-api", platform, dramas }, { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } });
@@ -46,6 +49,7 @@ export async function GET(request: Request) {
   }
 
   if (platform === "dramabox") {
+    if (page > 1) return NextResponse.json({ source: "dramabox-api", platform, page, hasMore: false, dramas: [] });
     try {
       const dramas = await fetchDramaBoxCatalog(language);
       return NextResponse.json(
@@ -75,7 +79,8 @@ export async function GET(request: Request) {
   // The preview remains usable without credentials. Once Supabase is configured,
   // the public RLS-protected catalog becomes the source of truth.
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
-    return NextResponse.json({ source: "preview", platform, dramas: platform === "dramaverse" || platform === "nunomix" ? fallbackDramas : [], externalOnly: platform === "bstation" });
+    const dramas = page === 1 && (platform === "dramaverse" || platform === "nunomix") ? fallbackDramas : [];
+    return NextResponse.json({ source: "preview", platform, page, hasMore: false, dramas, externalOnly: platform === "bstation" });
   }
 
   try {
@@ -85,7 +90,8 @@ export async function GET(request: Request) {
       .select("id,title,synopsis,poster_url,platforms!inner(slug,is_active),episodes(episode_number)")
       .eq("is_published", true)
       .eq("platforms.is_active", true)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range((page - 1) * 24, page * 24 - 1);
     // PintuMedia is the combined catalog; other selectors only see their provider.
     if (platform !== "nunomix") query = query.eq("platforms.slug", platform);
     const { data, error } = await query;
@@ -98,7 +104,7 @@ export async function GET(request: Request) {
       poster: item.poster_url ?? "/posters/catalog-01.webp",
       synopsis: item.synopsis ?? "",
     }));
-    return NextResponse.json({ source: "supabase", platform, dramas: catalog }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ source: "supabase", platform, page, hasMore: catalog.length === 24, dramas: catalog }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Catalog unavailable" }, { status: 503 });
   }

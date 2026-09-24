@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       .eq("is_published", true)
       .eq("platforms.is_active", true)
       .order("created_at", { ascending: false });
-    // NunoMix is the combined catalog; other selectors only see their provider.
+    // PintuMedia is the combined catalog; other selectors only see their provider.
     if (platform !== "nunomix") query = query.eq("platforms.slug", platform);
     const { data, error } = await query;
     if (error) throw error;

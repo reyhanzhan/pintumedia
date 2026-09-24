@@ -311,15 +311,16 @@ button { color: inherit; }
   .detail-copy article p { font-size: 14px; }
   .video-caption strong { max-width: 70vw; font-size: 18px; }
   .site-footer-inner { min-height: 140px; align-items: center; font-size: 18px; }
-  .platform-picker { width: calc(100% - 12px); max-height: min(78dvh, 760px); border-radius: 24px; }
-  .picker-head { padding: 17px 18px 12px; gap: 8px; }
-  .picker-head label { height: 58px; padding: 0 15px; border-radius: 18px; }
-  .picker-head input { font-size: 17px; }
-  .picker-grid { max-height: calc(78dvh - 151px); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px 5px; padding: 10px 16px 22px; }
-  .picker-grid > button { min-height: 137px; gap: 12px; border-radius: 21px; font-size: 16px; }
-  .picker-grid > button > img { width: 72px; height: 72px; border-radius: 19px; }
-  .picker-grid i { right: 8px; top: 8px; width: 27px; height: 27px; }
-  .platform-picker footer { height: 68px; padding: 0 18px; }
+  .platform-picker { width: calc(100% - 20px); max-height: min(72dvh, 690px); border-radius: 22px; }
+  .picker-head { padding: 14px 16px 10px; gap: 7px; }
+  .picker-head label { height: 50px; padding: 0 14px; border-radius: 17px; }
+  .picker-head input { font-size: 16px; }
+  .picker-grid { max-height: calc(72dvh - 128px); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px 2px; padding: 7px 14px 17px; }
+  .picker-grid > button { min-height: 112px; gap: 9px; border-radius: 17px; font-size: 14px; }
+  .picker-grid > button > img { width: 56px; height: 56px; border-radius: 15px; }
+  .picker-grid i { right: 7px; top: 7px; width: 22px; height: 22px; }
+  .platform-picker footer { height: 61px; padding: 0 17px; font-size: 13px; }
+  .platform-picker footer img { width: 25px; height: 25px; }
   .paywall { padding: 27px 20px; }
   .watch-toolbar { min-height: 78px; grid-template-columns: 48px 1fr 92px; gap: 6px; padding: max(10px, env(safe-area-inset-top)) 10px 0; }
   .watch-back { width: 44px; min-height: 44px; padding: 0; }
@@ -340,8 +341,8 @@ button { color: inherit; }
 }
 
 @media (max-width: 380px) {
-  .picker-grid > button > img { width: 66px; height: 66px; }
-  .picker-grid > button { min-height: 128px; font-size: 15px; }
+  .picker-grid > button > img { width: 52px; height: 52px; }
+  .picker-grid > button { min-height: 105px; font-size: 13px; }
 }
 
 .poster-crop { display: block; width: 100%; height: 100%; background-repeat: no-repeat; }

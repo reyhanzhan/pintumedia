@@ -39,6 +39,7 @@ export default function Home() {
   const [platform, setPlatform] = useState("DramaVerse");
   const [platformOpen, setPlatformOpen] = useState(false);
   const [platformQuery, setPlatformQuery] = useState("");
+  const [recentPlatforms, setRecentPlatforms] = useState<string[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
@@ -207,6 +208,29 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const openPlatformPicker = () => {
+    let recent: string[] = [];
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem("pintumedia.recent-platforms") ?? "[]");
+      if (Array.isArray(saved)) recent = saved.filter((slug): slug is string => typeof slug === "string" && platforms.some((item) => item.slug === slug));
+    } catch { /* Platform selection still works when browser storage is unavailable. */ }
+    setRecentPlatforms([...new Set([activePlatform.slug, ...recent])].slice(0, 6));
+    setPlatformQuery("");
+    setPlatformOpen(true);
+  };
+
+  const choosePlatform = (slug: string) => {
+    const item = platforms.find((entry) => entry.slug === slug);
+    if (!item) return;
+    const recent = [...new Set([slug, ...recentPlatforms])].slice(0, 6);
+    setRecentPlatforms(recent);
+    try { localStorage.setItem("pintumedia.recent-platforms", JSON.stringify(recent)); } catch { /* Storage is optional. */ }
+    setPlatform(item.name);
+    setPlatformOpen(false);
+    setSearchQuery("");
+    goHome();
+  };
+
   const startWatching = () => {
     setWatching(true);
     setEpisodeMenuOpen(false);
@@ -239,7 +263,7 @@ export default function Home() {
           <span>PintuMedia</span>
         </button>
         <div className="header-actions">
-          <button className="platform-pill" aria-haspopup="dialog" aria-expanded={platformOpen} onClick={() => { setPlatformQuery(""); setPlatformOpen(true); }}>
+          <button className="platform-pill" aria-label={t(`Pilih platform: ${platform}`, `Choose platform: ${platform}`)} aria-haspopup="dialog" aria-expanded={platformOpen} onClick={openPlatformPicker}>
             <Image src={activePlatform.icon} alt="" width={27} height={27} />
             <strong>{platform}</strong>
           </button>
@@ -341,15 +365,26 @@ export default function Home() {
       <footer className="site-footer"><div className="site-footer-inner"><p>PintuMedia : <a href="https://dedemultimedia.store/" target="_blank" rel="noopener noreferrer">By DedeMultimedia <ExternalLink size={16} aria-hidden="true" /></a></p><span>© 2026</span></div></footer>
 
       {platformOpen && (
-        <div className="modal-backdrop" onMouseDown={() => setPlatformOpen(false)}>
+        <div className="modal-backdrop platform-backdrop" onMouseDown={() => setPlatformOpen(false)}>
           <section className="platform-picker" role="dialog" aria-modal="true" aria-label={t("Pilih platform", "Choose platform")} onMouseDown={(event) => event.stopPropagation()}>
             <div className="picker-head">
-              <label><Search size={23} /><input autoFocus value={platformQuery} onChange={(event) => setPlatformQuery(event.target.value)} placeholder={t("Cari platform...", "Search platforms...")} /></label>
+              <label><Search size={23} /><input aria-label={t("Cari platform", "Search platforms")} value={platformQuery} onChange={(event) => setPlatformQuery(event.target.value)} placeholder={t("Cari platform...", "Search platforms...")} /></label>
               <button onClick={() => setPlatformOpen(false)} aria-label={t("Tutup", "Close")}><X /></button>
             </div>
+            {!platformQuery.trim() && recentPlatforms.length > 0 && <div className="picker-recent">
+              <p>{t("TERAKHIR DIPAKAI", "RECENTLY USED")}</p>
+              <div className="picker-recent-list">
+                {recentPlatforms.map((slug) => {
+                  const item = platforms.find((entry) => entry.slug === slug)!;
+                  return <button key={slug} className={platform === item.name ? "selected" : ""} aria-pressed={platform === item.name} onClick={() => choosePlatform(slug)}>
+                    <Image src={item.icon} alt="" width={22} height={22} /><span>{item.name}</span>
+                  </button>;
+                })}
+              </div>
+            </div>}
             <div className="picker-grid">
               {filteredPlatforms.map((item) => (
-                <button key={item.slug} aria-pressed={platform === item.name} className={platform === item.name ? "selected" : ""} onClick={() => { setPlatform(item.name); setPlatformOpen(false); setSearchQuery(""); goHome(); }}>
+                <button key={item.slug} aria-pressed={platform === item.name} className={platform === item.name ? "selected" : ""} onClick={() => choosePlatform(item.slug)}>
                   <Image src={item.icon} alt={`Logo ${item.name}`} width={58} height={58} />
                   <strong>{item.name}</strong>
                   {platform === item.name && <i><Check size={13} /></i>}

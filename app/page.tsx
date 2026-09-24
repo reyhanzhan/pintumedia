@@ -313,7 +313,7 @@ export default function Home() {
 
   return (
     <main>
-      {header}
+      {!profileOpen && header}
 
       {profileOpen && !selectedDrama && <ProfilePage t={t} onBack={() => { setProfileOpen(false); goHome(); }} />}
 
@@ -479,6 +479,8 @@ function ProfilePage({ t, onBack }: { t: (id: string, en: string) => string; onB
     { label: t("Program Affiliate", "Affiliate Program"), icon: Share2, action: () => undefined },
   ];
   return <section className="profile-page" aria-label={t("Profil", "Profile")}>
+    <div className="profile-user"><span className="profile-avatar">G</span><div><strong>Guest</strong><small>—</small></div><a href="#login">{t("Masuk", "Sign in")}</a></div>
+    <div className="profile-login-banner"><strong>{t("Mulai Nonton di PintuMedia", "Start watching on PintuMedia")}</strong><span>{t("Silakan login untuk menonton drama kesukaanmu.", "Sign in to watch your favorite dramas.")}</span></div>
     <div className="profile-heading"><button className="profile-back" onClick={onBack} aria-label={t("Kembali", "Back")}><ArrowLeft size={24} /></button><div><span className="profile-kicker">PINTUMEDIA</span><h1>{t("Profil", "Profile")}</h1></div></div>
     <div className="profile-card-list">
       {items.map(({ label, icon: Icon, action }) => <button className="profile-menu-card" key={label} onClick={action}><span className="profile-menu-icon"><Icon size={25} /></span><strong>{label}</strong><ArrowRight size={22} /></button>)}

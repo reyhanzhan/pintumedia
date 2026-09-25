@@ -73,6 +73,7 @@ export default function Home() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutInfo, setCheckoutInfo] = useState<{ orderId: string; dramaId: string | null; checkout: CheckoutResult } | null>(null);
+  const [planPrices, setPlanPrices] = useState<Record<PlanId, number>>({ series: plans.series.amount, monthly: plans.monthly.amount, weekly: plans.weekly.amount });
   const [toast, setToast] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState("");
   const [playbackLoading, setPlaybackLoading] = useState(false);
@@ -231,6 +232,14 @@ export default function Home() {
     setCheckoutError("");
     setPaywallOpen(true);
   };
+
+  // Prices can be changed anytime from the admin panel; always show the live value.
+  useEffect(() => {
+    fetch("/api/settings/public")
+      .then((response) => response.json() as Promise<{ planPrices: Record<PlanId, number> }>)
+      .then((data) => setPlanPrices(data.planPrices))
+      .catch(() => undefined);
+  }, []);
 
   // Returning visitors: if this browser already paid before, restore access
   // without asking them to pay again.
@@ -441,7 +450,7 @@ export default function Home() {
       <div className="site-header-inner">
         <button className="brand" onClick={goLanding} aria-label="PintuMedia beranda">
           <span className="brand-mark"><Image src="/brand/pintumedia-logo.jpg" alt="" width={54} height={54} priority /></span>
-          <span>PintuMedia</span>
+          <span>Pintumedia</span>
         </button>
         <div className="header-actions">
           <button className="platform-pill" aria-label={t(`Pilih platform: ${platform}`, `Choose platform: ${platform}`)} aria-haspopup="dialog" aria-expanded={platformOpen} onClick={openPlatformPicker}>
@@ -513,8 +522,8 @@ export default function Home() {
                 <h2>{t("Sinopsis", "Synopsis")}</h2>
                 <p>{selectedDrama.synopsis || t("Sinopsis belum tersedia.", "Synopsis is not available yet.")}</p>
               </article>
-              <button className="favorite-toggle" onClick={() => toggleFavorite(selectedDrama)} aria-pressed={favoriteDramas.some((item) => item.id === selectedDrama.id)}><Heart size={18} fill={favoriteDramas.some((item) => item.id === selectedDrama.id) ? "currentColor" : "none"} />{favoriteDramas.some((item) => item.id === selectedDrama.id) ? t("Hapus dari Favorit", "Remove from Favorites") : t("Tambah ke Favorit", "Add to Favorites")}</button>
               <button className="watch-now" onClick={startWatching}><Play size={19} fill="currentColor" /> {t("Mulai Menonton", "Start watching")}</button>
+              <button className="favorite-toggle" onClick={() => toggleFavorite(selectedDrama)} aria-pressed={favoriteDramas.some((item) => item.id === selectedDrama.id)}><Heart size={18} fill={favoriteDramas.some((item) => item.id === selectedDrama.id) ? "currentColor" : "none"} />{favoriteDramas.some((item) => item.id === selectedDrama.id) ? t("Hapus dari Favorit", "Remove from Favorites") : t("Tambah ke Favorit", "Add to Favorites")}</button>
             </div>
           </div>
         </section>
@@ -555,7 +564,7 @@ export default function Home() {
         </section>
       )}
 
-      {!profileOpen && <footer className="site-footer"><div className="site-footer-inner"><p>PintuMedia : <a href="https://dedemultimedia.store/" target="_blank" rel="noopener noreferrer">By DedeMultimedia <ExternalLink size={16} aria-hidden="true" /></a></p><span>© 2026</span></div></footer>}
+      {!profileOpen && <footer className="site-footer"><div className="site-footer-inner"><p>{t("PintuMedia : Request Film Aplikasi", "PintuMedia: Request a movie or app")}</p><a href="https://www.instagram.com/pintumedia.id" target="_blank" rel="noopener noreferrer">{t("By DM", "By DM")} <ExternalLink size={16} aria-hidden="true" /></a><span>© 2026</span></div></footer>}
 
       {platformOpen && (
         <div className="modal-backdrop platform-backdrop" onMouseDown={() => setPlatformOpen(false)}>
@@ -616,7 +625,7 @@ export default function Home() {
                     <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}>
                       <i>{plan === id && <Check size={14} />}</i>
                       <span><strong>{t(item.label, id === "series" ? "Unlock this drama" : id === "monthly" ? "Monthly plan" : "7-day plan")}</strong><small>{t(item.meta, id === "series" ? "Lifetime access" : "All dramas")}</small></span>
-                      <b>{formatIDR(item.amount)}</b>
+                      <b>{formatIDR(planPrices[id as PlanId])}</b>
                     </button>
                   ))}
                 </div>
@@ -642,7 +651,7 @@ export default function Home() {
                         <strong>{checkout.vaNumber}</strong>
                         <button type="button" className="va-copy" onClick={() => copyVaNumber(checkout.vaNumber)} aria-label={t("Salin nomor VA", "Copy VA number")}><Copy size={16} /></button>
                       </div>
-                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(plans[plan].amount)}</strong></div>
+                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(planPrices[plan])}</strong></div>
                     </>
                   ) : (
                     <>
@@ -659,7 +668,8 @@ export default function Home() {
         </div>
       )}
 
-      {!profileOpen && <button className="coffee-button" aria-label={t("Traktir kopi", "Buy us a coffee")} title={t("Traktir kopi", "Buy us a coffee")} onClick={() => setCoffeeOpen(true)}><Coffee size={29} /></button>}
+      {/* Traktir kopi dinonaktifkan sementara (item #6) — kode disengaja tidak dihapus. */}
+      {false && !profileOpen && <button className="coffee-button" aria-label={t("Traktir kopi", "Buy us a coffee")} title={t("Traktir kopi", "Buy us a coffee")} onClick={() => setCoffeeOpen(true)}><Coffee size={29} /></button>}
       {coffeeOpen && <div className="modal-backdrop" onMouseDown={() => setCoffeeOpen(false)}>
         <section className="paywall coffee-dialog" role="dialog" aria-modal="true" aria-labelledby="coffee-title" onMouseDown={(event) => event.stopPropagation()}>
           <button autoFocus className="modal-close" aria-label={t("Tutup", "Close")} onClick={() => setCoffeeOpen(false)}><X /></button>

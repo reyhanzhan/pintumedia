@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSettings, resolveSecret } from "@/lib/settings";
 
 /**
  * LinkQu payment notification (VA transfer detected) → mark the order paid, which
@@ -12,8 +13,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * the real callback sample before going live. Until confirmed, this fails closed
  * (rejects unverifiable calls) rather than silently accepting anything.
  */
-function verifyLinkQuSignature(payload: Record<string, unknown>, signature: string | null) {
-  const serverKey = process.env.LINKQU_SERVER_KEY;
+async function verifyLinkQuSignature(payload: Record<string, unknown>, signature: string | null) {
+  const settings = await getSettings();
+  const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
   if (!serverKey || !signature) return false;
   const normalized = [payload.partner_reff, payload.amount, payload.status]
     .join(".")
@@ -28,7 +30,7 @@ function verifyLinkQuSignature(payload: Record<string, unknown>, signature: stri
 export async function POST(request: Request) {
   const payload = (await request.json()) as Record<string, unknown>;
   const signature = request.headers.get("x-signature") ?? (payload.signature as string | undefined) ?? null;
-  if (!verifyLinkQuSignature(payload, signature)) {
+  if (!(await verifyLinkQuSignature(payload, signature))) {
     return Response.json({ error: "Signature tidak valid" }, { status: 401 });
   }
   const orderId = String(payload.partner_reff ?? "");

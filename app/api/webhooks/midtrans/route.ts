@@ -1,10 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSettings, resolveSecret } from "@/lib/settings";
 
 const digest = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-512", new TextEncoder().encode(value)))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 export async function POST(request: Request) {
-  const payload = await request.json() as Record<string, string>;
-  const key = process.env.MIDTRANS_SERVER_KEY;
+  const payload = (await request.json()) as Record<string, string>;
+  const settings = await getSettings();
+  const key = resolveSecret(settings, "MIDTRANS_SERVER_KEY");
   if (!key) return Response.json({ error: "Server key belum tersedia" }, { status: 503 });
   const expected = await digest(`${payload.order_id}${payload.status_code}${payload.gross_amount}${key}`);
   if (expected !== payload.signature_key) return Response.json({ error: "Signature tidak valid" }, { status: 401 });

@@ -1,11 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSettings, resolveSecret } from "@/lib/settings";
 
 export async function POST(request: Request) {
   const token = request.headers.get("x-callback-token");
-  if (!process.env.XENDIT_WEBHOOK_TOKEN || token !== process.env.XENDIT_WEBHOOK_TOKEN) {
+  const settings = await getSettings();
+  const expectedToken = resolveSecret(settings, "XENDIT_WEBHOOK_TOKEN");
+  if (!expectedToken || token !== expectedToken) {
     return Response.json({ error: "Webhook token tidak valid" }, { status: 401 });
   }
-  const payload = await request.json() as { event?: string; data?: Record<string, unknown>; reference_id?: string; status?: string };
+  const payload = (await request.json()) as { event?: string; data?: Record<string, unknown>; reference_id?: string; status?: string };
   const data = payload.data ?? {};
   const referenceId = String(data.reference_id ?? payload.reference_id ?? "");
   const rawStatus = String(data.status ?? payload.status ?? "").toUpperCase();

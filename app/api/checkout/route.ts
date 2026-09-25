@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createCheckout, plans } from "@/lib/payments/provider";
+import { createCheckout } from "@/lib/payments/provider";
+import { getSettings } from "@/lib/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const inputSchema = z
@@ -18,9 +19,11 @@ const inputSchema = z
 export async function POST(request: Request) {
   try {
     const input = inputSchema.parse(await request.json());
+    const settings = await getSettings();
+    const amount = settings.planPrices[input.planId];
     const orderId = crypto.randomUUID();
     const origin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
-    const checkout = await createCheckout({ orderId, planId: input.planId, email: input.email, origin });
+    const checkout = await createCheckout({ orderId, planId: input.planId, email: input.email, origin, amount }, settings);
     const supabase = createAdminClient();
     let referrerProfileId: string | null = null;
     if (input.referralCode) {
@@ -33,7 +36,7 @@ export async function POST(request: Request) {
       referrer_profile_id: referrerProfileId,
       plan_id: input.planId,
       drama_id: input.planId === "series" ? input.dramaId : null,
-      amount: plans[input.planId].amount,
+      amount,
       provider: checkout.provider,
       provider_reference: checkout.reference,
       status: "pending",

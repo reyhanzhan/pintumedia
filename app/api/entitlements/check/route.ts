@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getSettings } from "@/lib/settings";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const email = url.searchParams.get("email");
   const dramaId = url.searchParams.get("dramaId");
   if (!email) return NextResponse.json({ unlocked: false });
+
+  const settings = await getSettings();
+  if (settings.freeEmails.includes(email.toLowerCase())) {
+    return NextResponse.json({ unlocked: true, global: true });
+  }
 
   const nowIso = new Date().toISOString();
   const { data, error } = await createAdminClient()

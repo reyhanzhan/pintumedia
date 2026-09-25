@@ -1,21 +1,19 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SECRET_FIELDS, type SecretField } from "@/lib/secret-fields";
+import { DEFAULT_PLANS, type Plan } from "@/lib/plans";
 
-export type PlanPrices = { series: number; monthly: number; weekly: number };
 export type AppSecrets = Partial<Record<SecretField, string>>;
 export type PaymentProviderId = "" | "midtrans" | "xendit" | "linkqu";
 
 export type AppSettings = {
-  planPrices: PlanPrices;
+  plans: Plan[];
   freeEmails: string[];
   paymentProvider: PaymentProviderId;
   secrets: AppSecrets;
 };
 
-const DEFAULT_PRICES: PlanPrices = { series: 25_000, monthly: 39_000, weekly: 19_000 };
-
-type SettingsRow = { plan_prices: unknown; free_emails: string[]; payment_provider: string; secrets: unknown } | null;
+type SettingsRow = { plans: unknown; free_emails: string[]; payment_provider: string; secrets: unknown } | null;
 
 // Supabase may be unconfigured (createAdminClient throws synchronously) or the
 // table may not exist yet (query error) — either way, settings should degrade
@@ -24,7 +22,7 @@ async function fetchSettingsRow(): Promise<SettingsRow> {
   try {
     const { data } = await createAdminClient()
       .from("app_settings")
-      .select("plan_prices,free_emails,payment_provider,secrets")
+      .select("plans,free_emails,payment_provider,secrets")
       .eq("id", "default")
       .maybeSingle();
     return data;
@@ -40,9 +38,10 @@ async function fetchSettingsRow(): Promise<SettingsRow> {
  */
 export async function getSettings(): Promise<AppSettings> {
   const data = await fetchSettingsRow();
+  const plans = data?.plans as Plan[] | undefined;
 
   return {
-    planPrices: { ...DEFAULT_PRICES, ...(data?.plan_prices as Partial<PlanPrices> | undefined) },
+    plans: Array.isArray(plans) && plans.length ? plans : DEFAULT_PLANS,
     freeEmails: data?.free_emails ?? [],
     paymentProvider: (data?.payment_provider as PaymentProviderId) || (process.env.PAYMENT_PROVIDER as PaymentProviderId) || "",
     secrets: (data?.secrets as AppSecrets | undefined) ?? {},

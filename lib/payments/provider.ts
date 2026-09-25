@@ -1,12 +1,8 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import { plans, type PlanId } from "@/lib/plans";
 import { resolveSecret, type AppSettings } from "@/lib/settings";
 
-export { plans };
-export type { PlanId };
-
-type CheckoutInput = { orderId: string; planId: PlanId; email: string; origin: string; amount: number };
+type CheckoutInput = { orderId: string; planId: string; planLabel: string; email: string; origin: string; amount: number };
 
 export type CheckoutResult =
   | { provider: "midtrans" | "xendit"; method: "redirect"; reference: string; checkoutUrl: string }
@@ -27,7 +23,7 @@ async function createMidtransCheckout(input: CheckoutInput, settings: AppSetting
     body: JSON.stringify({
       transaction_details: { order_id: input.orderId, gross_amount: input.amount },
       customer_details: { email: input.email },
-      item_details: [{ id: input.planId, price: input.amount, quantity: 1, name: plans[input.planId].label }],
+      item_details: [{ id: input.planId, price: input.amount, quantity: 1, name: input.planLabel }],
       callbacks: { finish: `${input.origin}/?payment=finish`, error: `${input.origin}/?payment=error` },
     }),
   });
@@ -51,7 +47,7 @@ async function createXenditCheckout(input: CheckoutInput, settings: AppSettings)
       country: "ID",
       locale: "id",
       customer: { reference_id: `customer-${input.orderId}`, type: "INDIVIDUAL", email: input.email, individual_detail: { given_names: "PintuMedia" } },
-      description: plans[input.planId].label,
+      description: input.planLabel,
       success_return_url: `${input.origin}/?payment=success`,
       cancel_return_url: `${input.origin}/?payment=cancelled`,
     }),

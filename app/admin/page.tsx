@@ -3,16 +3,21 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { SECRET_FIELD_GROUPS, type SecretField } from "@/lib/secret-fields";
+import { DEFAULT_PLANS, type Plan } from "@/lib/plans";
 
-type PlanPrices = { series: number; monthly: number; weekly: number };
 type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu";
 type Secrets = Partial<Record<SecretField, string>>;
 
-const PLAN_LABELS: Record<keyof PlanPrices, string> = {
-  series: "Buka drama ini",
-  monthly: "Paket bulanan",
-  weekly: "Paket 7 hari",
-};
+function newBlankPlan(): Plan {
+  return {
+    id: `plan-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    label: "Paket baru",
+    meta: "",
+    amount: 0,
+    scope: "global",
+    durationDays: 30,
+  };
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -20,7 +25,7 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
-  const [planPrices, setPlanPrices] = useState<PlanPrices>({ series: 25_000, monthly: 39_000, weekly: 19_000 });
+  const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
   const [freeEmails, setFreeEmails] = useState<string[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>("");
@@ -33,10 +38,10 @@ export default function AdminPage() {
           router.replace("/admin/login");
           throw new Error("unauthorized");
         }
-        return response.json() as Promise<{ planPrices: PlanPrices; freeEmails: string[]; paymentProvider: PaymentProvider; secrets: Secrets }>;
+        return response.json() as Promise<{ plans: Plan[]; freeEmails: string[]; paymentProvider: PaymentProvider; secrets: Secrets }>;
       })
       .then((data) => {
-        setPlanPrices(data.planPrices);
+        setPlans(data.plans);
         setFreeEmails(data.freeEmails);
         setPaymentProvider(data.paymentProvider);
         setSecrets(data.secrets);
@@ -45,6 +50,22 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const updatePlan = (index: number, patch: Partial<Plan>) => {
+    setPlans((current) => current.map((plan, i) => (i === index ? { ...plan, ...patch } : plan)));
+  };
+
+  const removePlan = (index: number) => setPlans((current) => current.filter((_, i) => i !== index));
+
+  const movePlan = (index: number, direction: -1 | 1) => {
+    setPlans((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
 
   const addFreeEmail = () => {
     const email = newEmail.trim().toLowerCase();
@@ -65,7 +86,7 @@ export default function AdminPage() {
       const response = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planPrices, freeEmails, paymentProvider, secrets }),
+        body: JSON.stringify({ plans, freeEmails, paymentProvider, secrets }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan.");
@@ -93,19 +114,65 @@ export default function AdminPage() {
       </div>
 
       <section style={styles.card}>
-        <h2 style={styles.h2}>Harga Paket</h2>
-        {(Object.keys(planPrices) as (keyof PlanPrices)[]).map((key) => (
-          <label key={key} style={styles.field}>
-            <span>{PLAN_LABELS[key]}</span>
-            <input
-              type="number"
-              min={0}
-              value={planPrices[key]}
-              onChange={(event) => setPlanPrices((current) => ({ ...current, [key]: Number(event.target.value) || 0 }))}
-              style={styles.input}
-            />
-          </label>
+        <h2 style={styles.h2}>Paket Harga</h2>
+        {plans.map((plan, index) => (
+          <div key={plan.id} style={styles.planCard}>
+            <div style={styles.planHeadRow}>
+              <strong style={{ fontSize: 13, color: "#8e9bb0" }}>Paket {index + 1}</strong>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => movePlan(index, -1)} disabled={index === 0} style={styles.moveButton} aria-label="Naikkan urutan">↑</button>
+                <button type="button" onClick={() => movePlan(index, 1)} disabled={index === plans.length - 1} style={styles.moveButton} aria-label="Turunkan urutan">↓</button>
+                <button type="button" onClick={() => removePlan(index)} style={styles.removeButton}>Hapus</button>
+              </div>
+            </div>
+            <label style={styles.field}>
+              <span>Nama paket</span>
+              <input value={plan.label} onChange={(event) => updatePlan(index, { label: event.target.value })} style={styles.input} />
+            </label>
+            <label style={styles.field}>
+              <span>Keterangan singkat</span>
+              <input value={plan.meta} onChange={(event) => updatePlan(index, { meta: event.target.value })} style={styles.input} placeholder="mis. Semua drama" />
+            </label>
+            <label style={styles.field}>
+              <span>Harga (Rp)</span>
+              <input
+                type="number"
+                min={0}
+                value={plan.amount}
+                onChange={(event) => updatePlan(index, { amount: Number(event.target.value) || 0 })}
+                style={styles.input}
+              />
+            </label>
+            <label style={styles.field}>
+              <span>Buka apa</span>
+              <select
+                value={plan.scope}
+                onChange={(event) => updatePlan(index, { scope: event.target.value as Plan["scope"] })}
+                style={styles.input}
+              >
+                <option value="drama">Drama yang sedang dibuka pengguna saja</option>
+                <option value="global">Semua drama</option>
+              </select>
+            </label>
+            <label style={styles.field}>
+              <span>Masa aktif</span>
+              <select
+                value={plan.durationDays ?? "lifetime"}
+                onChange={(event) => updatePlan(index, { durationDays: event.target.value === "lifetime" ? null : Number(event.target.value) })}
+                style={styles.input}
+              >
+                <option value="lifetime">Selamanya</option>
+                <option value="7">7 hari</option>
+                <option value="30">30 hari</option>
+                <option value="90">90 hari</option>
+                <option value="365">365 hari</option>
+              </select>
+            </label>
+          </div>
         ))}
+        <button type="button" onClick={() => setPlans((current) => [...current, newBlankPlan()])} style={styles.addButton}>
+          + Tambah Paket
+        </button>
       </section>
 
       <section style={styles.card}>
@@ -175,8 +242,11 @@ const styles: Record<string, CSSProperties> = {
   h2: { margin: 0, fontSize: 16, color: "#e3b23c" },
   field: { display: "grid", gap: 6, fontSize: 13, color: "#8e9bb0" },
   input: { height: 42, padding: "0 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.03)", color: "white", fontSize: 14 },
-  addButton: { padding: "0 16px", border: 0, borderRadius: 8, background: "#e3b23c", color: "#111", fontWeight: 700, cursor: "pointer" },
+  addButton: { padding: "0 16px", height: 42, border: 0, borderRadius: 8, background: "#e3b23c", color: "#111", fontWeight: 700, cursor: "pointer" },
   removeButton: { padding: "4px 10px", border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, background: "transparent", color: "#ff8a8a", cursor: "pointer", fontSize: 12 },
+  moveButton: { width: 30, height: 30, border: "1px solid rgba(255,255,255,.15)", borderRadius: 6, background: "transparent", color: "#f2f6fb", cursor: "pointer" },
   emailRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, background: "rgba(255,255,255,.03)" },
+  planCard: { display: "grid", gap: 10, padding: 14, border: "1px solid rgba(255,255,255,.1)", borderRadius: 10, background: "rgba(255,255,255,.02)" },
+  planHeadRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   save: { width: "100%", height: 50, border: 0, borderRadius: 12, background: "linear-gradient(90deg,#c99a2e,#e3b23c)", color: "#111", fontWeight: 800, fontSize: 16, cursor: "pointer" },
 };

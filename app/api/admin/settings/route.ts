@@ -3,13 +3,19 @@ import { z } from "zod";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SECRET_FIELDS } from "@/lib/secret-fields";
+import { DEFAULT_PLANS } from "@/lib/plans";
+
+const planSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().trim().min(1).max(80),
+  meta: z.string().trim().max(120),
+  amount: z.number().int().min(0),
+  scope: z.enum(["drama", "global"]),
+  durationDays: z.number().int().min(1).max(3650).nullable(),
+});
 
 const updateSchema = z.object({
-  planPrices: z.object({
-    series: z.number().int().min(0),
-    monthly: z.number().int().min(0),
-    weekly: z.number().int().min(0),
-  }),
+  plans: z.array(planSchema).max(50),
   freeEmails: z.array(z.string().trim().email()).max(10),
   paymentProvider: z.enum(["", "midtrans", "xendit", "linkqu"]),
   secrets: z.record(z.string(), z.string()),
@@ -19,12 +25,12 @@ export async function GET() {
   if (!(await isAdminRequest())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { data, error } = await createAdminClient()
     .from("app_settings")
-    .select("plan_prices,free_emails,payment_provider,secrets")
+    .select("plans,free_emails,payment_provider,secrets")
     .eq("id", "default")
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({
-    planPrices: data?.plan_prices ?? { series: 25_000, monthly: 39_000, weekly: 19_000 },
+    plans: data?.plans ?? DEFAULT_PLANS,
     freeEmails: data?.free_emails ?? [],
     paymentProvider: data?.payment_provider ?? "",
     secrets: data?.secrets ?? {},
@@ -43,7 +49,7 @@ export async function PUT(request: Request) {
     const { error } = await createAdminClient()
       .from("app_settings")
       .update({
-        plan_prices: input.planPrices,
+        plans: input.plans,
         free_emails: [...new Set(input.freeEmails.map((email) => email.toLowerCase()))],
         payment_provider: input.paymentProvider,
         secrets: filteredSecrets,

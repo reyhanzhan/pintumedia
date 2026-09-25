@@ -4,26 +4,29 @@ import { createCheckout } from "@/lib/payments/provider";
 import { getSettings } from "@/lib/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const inputSchema = z
-  .object({
-    planId: z.enum(["series", "monthly", "weekly"]),
-    email: z.string().email(),
-    dramaId: z.string().trim().min(1).max(200).optional(),
-    referralCode: z.string().trim().min(3).max(40).optional(),
-  })
-  .refine((value) => value.planId !== "series" || !!value.dramaId, {
-    message: "dramaId wajib diisi untuk paket 'Buka drama ini'.",
-    path: ["dramaId"],
-  });
+const inputSchema = z.object({
+  planId: z.string().min(1),
+  email: z.string().email(),
+  dramaId: z.string().trim().min(1).max(200).optional(),
+  referralCode: z.string().trim().min(3).max(40).optional(),
+});
 
 export async function POST(request: Request) {
   try {
     const input = inputSchema.parse(await request.json());
     const settings = await getSettings();
-    const amount = settings.planPrices[input.planId];
+    const plan = settings.plans.find((item) => item.id === input.planId);
+    if (!plan) return NextResponse.json({ error: "Paket tidak ditemukan." }, { status: 400 });
+    if (plan.scope === "drama" && !input.dramaId) {
+      return NextResponse.json({ error: "Pilih drama dulu untuk paket ini." }, { status: 400 });
+    }
+
     const orderId = crypto.randomUUID();
     const origin = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
-    const checkout = await createCheckout({ orderId, planId: input.planId, email: input.email, origin, amount }, settings);
+    const checkout = await createCheckout(
+      { orderId, planId: plan.id, planLabel: plan.label, email: input.email, origin, amount: plan.amount },
+      settings,
+    );
     const supabase = createAdminClient();
     let referrerProfileId: string | null = null;
     if (input.referralCode) {
@@ -34,9 +37,10 @@ export async function POST(request: Request) {
       id: orderId,
       email: input.email,
       referrer_profile_id: referrerProfileId,
-      plan_id: input.planId,
-      drama_id: input.planId === "series" ? input.dramaId : null,
-      amount,
+      plan_id: plan.id,
+      drama_id: plan.scope === "drama" ? input.dramaId : null,
+      duration_days: plan.durationDays,
+      amount: plan.amount,
       provider: checkout.provider,
       provider_reference: checkout.reference,
       status: "pending",

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Hls from "hls.js";
 import { platforms } from "../lib/platforms";
 import type { Drama } from "../lib/catalog";
-import { plans, formatIDR, type PlanId } from "../lib/plans";
+import { DEFAULT_PLANS, formatIDR, type Plan } from "../lib/plans";
 import type { CheckoutResult } from "../lib/payments/provider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -67,13 +67,14 @@ export default function Home() {
   const [unlockedDramaIds, setUnlockedDramaIds] = useState<Set<string>>(new Set());
   const unlocked = globalUnlocked || (!!selectedDrama && unlockedDramaIds.has(String(selectedDrama.id)));
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [plan, setPlan] = useState<PlanId>("monthly");
+  const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
+  const [plan, setPlan] = useState<string>(DEFAULT_PLANS[0]?.id ?? "");
+  const selectedPlan = plans.find((item) => item.id === plan) ?? plans[0];
   const [checkoutEmail, setCheckoutEmail] = useState("");
   const [checkoutStage, setCheckoutStage] = useState<"select" | "pay">("select");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutInfo, setCheckoutInfo] = useState<{ orderId: string; dramaId: string | null; checkout: CheckoutResult } | null>(null);
-  const [planPrices, setPlanPrices] = useState<Record<PlanId, number>>({ series: plans.series.amount, monthly: plans.monthly.amount, weekly: plans.weekly.amount });
   const [toast, setToast] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState("");
   const [playbackLoading, setPlaybackLoading] = useState(false);
@@ -233,11 +234,15 @@ export default function Home() {
     setPaywallOpen(true);
   };
 
-  // Prices can be changed anytime from the admin panel; always show the live value.
+  // Plans (labels, prices, order) can be changed anytime from the admin panel; always show the live list.
   useEffect(() => {
     fetch("/api/settings/public")
-      .then((response) => response.json() as Promise<{ planPrices: Record<PlanId, number> }>)
-      .then((data) => setPlanPrices(data.planPrices))
+      .then((response) => response.json() as Promise<{ plans: Plan[] }>)
+      .then((data) => {
+        if (!data.plans?.length) return;
+        setPlans(data.plans);
+        setPlan((current) => (data.plans.some((item) => item.id === current) ? current : data.plans[0].id));
+      })
       .catch(() => undefined);
   }, []);
 
@@ -273,8 +278,10 @@ export default function Home() {
   const handleCheckout = async () => {
     const email = checkoutEmail.trim();
     if (!email) { setCheckoutError(t("Email wajib diisi.", "Email is required.")); return; }
-    const dramaId = plan === "series" && selectedDrama ? String(selectedDrama.id) : null;
-    if (plan === "series" && !dramaId) { setCheckoutError(t("Pilih drama dulu.", "Pick a drama first.")); return; }
+    if (!selectedPlan) { setCheckoutError(t("Pilih paket dulu.", "Pick a plan first.")); return; }
+    const needsDrama = selectedPlan.scope === "drama";
+    const dramaId = needsDrama && selectedDrama ? String(selectedDrama.id) : null;
+    if (needsDrama && !dramaId) { setCheckoutError(t("Pilih drama dulu.", "Pick a drama first.")); return; }
     setCheckoutLoading(true);
     setCheckoutError("");
     try {
@@ -621,11 +628,11 @@ export default function Home() {
               <>
                 <p>{t("Episode 1–5 gratis. Pilih akses untuk melanjutkan cerita.", "Episodes 1–5 are free. Choose a plan to continue.")}</p>
                 <div className="plan-list">
-                  {Object.entries(plans).map(([id, item]) => (
-                    <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}>
-                      <i>{plan === id && <Check size={14} />}</i>
-                      <span><strong>{t(item.label, id === "series" ? "Unlock this drama" : id === "monthly" ? "Monthly plan" : "7-day plan")}</strong><small>{t(item.meta, id === "series" ? "Lifetime access" : "All dramas")}</small></span>
-                      <b>{formatIDR(planPrices[id as PlanId])}</b>
+                  {plans.map((item) => (
+                    <button className={plan === item.id ? "selected" : ""} key={item.id} onClick={() => setPlan(item.id)}>
+                      <i>{plan === item.id && <Check size={14} />}</i>
+                      <span><strong>{item.label}</strong><small>{item.meta}</small></span>
+                      <b>{formatIDR(item.amount)}</b>
                     </button>
                   ))}
                 </div>
@@ -651,7 +658,7 @@ export default function Home() {
                         <strong>{checkout.vaNumber}</strong>
                         <button type="button" className="va-copy" onClick={() => copyVaNumber(checkout.vaNumber)} aria-label={t("Salin nomor VA", "Copy VA number")}><Copy size={16} /></button>
                       </div>
-                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(planPrices[plan])}</strong></div>
+                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(selectedPlan?.amount ?? 0)}</strong></div>
                     </>
                   ) : (
                     <>

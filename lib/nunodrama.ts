@@ -1,4 +1,5 @@
 import type { Drama } from "@/lib/catalog";
+import { createHmac } from "node:crypto";
 
 type ProviderConfig = {
   apiSlug: string;
@@ -79,17 +80,34 @@ function settings() {
   };
 }
 
+function proxyPosterUrl(value: string, provider: string) {
+  if (!value || provider !== "dramabite") return value;
+  const { token } = settings();
+  const src = Buffer.from(value, "utf8").toString("base64url");
+  const sig = createHmac("sha256", token).update(src).digest("base64url");
+  return `/api/nunodrama/image?src=${encodeURIComponent(src)}&sig=${encodeURIComponent(sig)}`;
+}
+
 async function requestJson(path: string, params: Record<string, string> = {}) {
   const { token, baseUrl } = settings();
   const url = new URL(path, baseUrl);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  const response = await fetch(url, {
-    headers: { "X-API-TOKEN": token, Accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) throw new Error(`NunoDrama API returned ${response.status}`);
-  return response.json() as Promise<unknown>;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: { "X-API-TOKEN": token, Accept: "application/json" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!response.ok) throw new Error(`NunoDrama API returned ${response.status}`);
+      return response.json() as Promise<unknown>;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("NunoDrama API tidak merespons.");
 }
 
 function record(value: unknown): JsonRecord | null {
@@ -100,7 +118,7 @@ function findItems(payload: unknown, depth = 0): JsonRecord[] {
   if (depth > 4) return [];
   if (Array.isArray(payload)) {
     const objects = payload.map(record).filter((item): item is JsonRecord => !!item);
-    if (objects.some((item) => "bookId" in item || "bookName" in item || "title" in item)) return objects;
+    if (objects.some((item) => "bookId" in item || "book_id" in item || "bookName" in item || "book_name" in item || "title" in item)) return objects;
     for (const item of payload) {
       const nested = findItems(item, depth + 1);
       if (nested.length) return nested;
@@ -126,21 +144,38 @@ function firstValue(item: JsonRecord, keys: string[]) {
   return keys.map((key) => item[key]).find((value) => typeof value === "string" || typeof value === "number");
 }
 
+function normalizePosterUrl(value: string, provider: string) {
+  if (!value) return "";
+  if (provider === "dramabite") {
+    try {
+      const url = new URL(value);
+      if (url.hostname === "cdn-oss.miniepisode.media" && !url.pathname.startsWith("/episode/")) {
+        url.pathname = `/episode${url.pathname}`;
+        return url.toString();
+      }
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function parseCatalog(payload: unknown, provider: string): Drama[] {
   return findItems(payload).map((item, index) => {
     const sourceId = String(firstValue(item, ["bookId", "book_id", "id", "dramaId", "playletId", "code"]) ?? `${index}`);
-    const title = String(firstValue(item, ["bookName", "title", "name", "dramaName"]) ?? "").trim();
-    const episodes = Number(firstValue(item, ["chapterCount", "episodeCount", "episodes", "totalEpisode", "totalEpisodes"]) ?? 0) || 0;
+    const title = String(firstValue(item, ["bookName", "book_name", "title", "name", "dramaName"]) ?? "").trim();
+    const episodes = Number(firstValue(item, ["chapterCount", "chapter_count", "episodeCount", "episode_count", "episodes", "num_videos", "totalEpisode", "totalEpisodes", "total_episodes"]) ?? 0) || 0;
+    const poster = normalizePosterUrl(String(firstValue(item, ["cover", "coverUrl", "coverWap", "book_cover", "poster", "thumbnail", "image"]) ?? "").trim(), provider);
     return {
       id: `nuno:${provider}:${sourceId}`,
       title,
       episodes,
-      poster: String(firstValue(item, ["cover", "coverUrl", "coverWap", "poster", "thumbnail", "image"]) ?? "/posters/catalog-01.webp"),
-      synopsis: String(firstValue(item, ["description", "introduction", "desc", "synopsis"]) ?? ""),
+      poster: poster ? proxyPosterUrl(poster, provider) : "/brand/pintumedia-logo.jpg",
+      synopsis: String(firstValue(item, ["description", "introduction", "intro", "desc", "synopsis"]) ?? ""),
       sourceProvider: provider,
       sourceId,
     } satisfies Drama;
-  }).filter((item) => item.title && item.episodes > 0);
+  }).filter((item) => item.title);
 }
 
 function findUrl(payload: unknown, depth = 0): string | null {
@@ -170,14 +205,17 @@ export function supportsNunoProvider(provider: string) {
   return !!NUNO_PROVIDERS[provider];
 }
 
-export async function fetchNunoCatalog(provider: string, language: "in" | "en") {
+export async function fetchNunoCatalog(provider: string, language: "in" | "en", page = 1) {
   const config = NUNO_PROVIDERS[provider];
   if (!config) throw new Error(`Provider ${provider} belum didukung adapter NunoDrama.`);
 
   // Most providers expose a token-scoped language setter. Ignore failures for
   // providers that do not implement it and still request the feed.
   await requestJson(`/api/${config.apiSlug}/set_language`, { lang: language }).catch(() => undefined);
-  const payload = await requestJson(`/api/${config.apiSlug}/${config.feed}`, config.feedParams);
+  const payload = await requestJson(`/api/${config.apiSlug}/${config.feed}`, {
+    ...config.feedParams,
+    page: String(page),
+  });
   const catalog = parseCatalog(payload, provider);
   if (!catalog.length) throw new Error("NunoDrama API returned an empty catalog");
   return catalog;

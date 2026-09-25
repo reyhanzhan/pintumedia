@@ -3,7 +3,7 @@
 export type Platform = { slug: string; name: string; icon: string };
 
 export const platforms: readonly Platform[] = [
-  {"slug":"nunomix","name":"NunoMix","icon":"/platform-icons/reference/NunoMix.webp"},
+  {"slug":"nunomix","name":"PintuMedia","icon":"/brand/pintumedia-logo.jpg"},
   {"slug":"dramabox","name":"DramaBox","icon":"/platform-icons/reference/dramabox.webp"},
   {"slug":"dramaverse","name":"DramaVerse","icon":"/platform-icons/reference/dramaverse.jpg"},
   {"slug":"dramawave","name":"DramaWave","icon":"/platform-icons/reference/dramawave.png"},
@@ -60,4 +60,3 @@ export const platforms: readonly Platform[] = [
   {"slug":"vigloo","name":"Vigloo","icon":"/platform-icons/reference/vigloo.png"},
   {"slug":"wetv","name":"WeTV","icon":"/platform-icons/reference/wetv.png"},
 ];
-

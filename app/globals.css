@@ -517,16 +517,17 @@ button { color: inherit; }
 .poster-fallback small { color: #aebbd0; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .brand-mark { overflow: hidden; flex-shrink: 0; background: #000; }
 .brand-mark img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.3); }
-.qris-checkout { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 22px; }
-.qris-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.qris-summary > div { display: grid; gap: 6px; min-width: 0; }
-.qris-summary small { color: #10bdea; letter-spacing: .04em; font-weight: 700; }
-.qris-summary strong { font-size: 14px; overflow-wrap: anywhere; }
-.qris-summary b { white-space: nowrap; font-size: 20px; }
-.qris-preview { margin: 18px 0; padding: 12px 14px; border: 1px solid #80632d; border-radius: 10px; color: #f3d291; background: #302b22; font-size: 13px; line-height: 1.5; }
-.qris-image { display: block; width: min(100%, 330px); height: auto; margin: 0 auto; border-radius: 12px; background: white; }
-.qris-download { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin-top: 12px; color: #23c5ef; font-size: 14px; text-decoration: none; }
-.qris-note { margin: 10px 0 0; color: #9ca9bd; font-size: 13px; line-height: 1.6; text-align: center; }
+.checkout-field { display: grid; gap: 6px; margin-top: 18px; }
+.checkout-field label { color: #9ca9bd; font-size: 13px; }
+.checkout-field input { height: 46px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: white; font-size: 15px; }
+.checkout-error { margin: 12px 0 0; color: #ff8a8a; font-size: 13px; text-align: center; }
+.va-box { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 22px; }
+.va-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.va-row small { color: #10bdea; letter-spacing: .04em; font-weight: 700; }
+.va-row strong { font-size: 16px; overflow-wrap: anywhere; }
+.va-copy { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: #10bdea; cursor: pointer; }
+.va-copy:hover { background: rgba(16, 189, 234, 0.1); }
+.spin { animation: spin .8s linear infinite; }
 .video-poster { position: absolute; inset: 0; opacity: .65; }
 .search-results .search-poster { position: relative; display: block; width: 52px; height: 78px; overflow: hidden; border-radius: 8px; }
 .language-control { position: relative; }

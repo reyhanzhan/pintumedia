@@ -3,11 +3,17 @@ import { z } from "zod";
 import { createCheckout, plans } from "@/lib/payments/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const inputSchema = z.object({
-  planId: z.enum(["series", "monthly", "weekly"]),
-  email: z.string().email(),
-  referralCode: z.string().trim().min(3).max(40).optional(),
-});
+const inputSchema = z
+  .object({
+    planId: z.enum(["series", "monthly", "weekly"]),
+    email: z.string().email(),
+    dramaId: z.string().trim().min(1).max(200).optional(),
+    referralCode: z.string().trim().min(3).max(40).optional(),
+  })
+  .refine((value) => value.planId !== "series" || !!value.dramaId, {
+    message: "dramaId wajib diisi untuk paket 'Buka drama ini'.",
+    path: ["dramaId"],
+  });
 
 export async function POST(request: Request) {
   try {
@@ -26,13 +32,14 @@ export async function POST(request: Request) {
       email: input.email,
       referrer_profile_id: referrerProfileId,
       plan_id: input.planId,
+      drama_id: input.planId === "series" ? input.dramaId : null,
       amount: plans[input.planId].amount,
       provider: checkout.provider,
       provider_reference: checkout.reference,
       status: "pending",
     });
     if (error) throw error;
-    return NextResponse.json({ checkoutUrl: checkout.checkoutUrl, orderId });
+    return NextResponse.json({ orderId, checkout });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Checkout gagal dibuat.";
     return NextResponse.json({ error: message }, { status: 400 });

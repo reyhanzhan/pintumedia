@@ -4,13 +4,16 @@ import Image from "next/image";
 import Hls from "hls.js";
 import { platforms } from "../lib/platforms";
 import type { Drama } from "../lib/catalog";
+import { plans, formatIDR, type PlanId } from "../lib/plans";
+import type { CheckoutResult } from "../lib/payments/provider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
   Coffee,
   ExternalLink,
-  Download,
+  Copy,
+  Loader2,
   ChevronDown,
   ChevronRight,
   Globe2,
@@ -34,13 +37,6 @@ import {
   X,
 } from "lucide-react";
 
-const plans = {
-  series: { label: "Buka drama ini", meta: "Akses selamanya", price: "Rp25.000" },
-  monthly: { label: "Paket bulanan", meta: "Semua drama", price: "Rp39.000" },
-  weekly: { label: "Paket 7 hari", meta: "Semua drama", price: "Rp19.000" },
-} as const;
-
-type PlanId = keyof typeof plans;
 type ProfileView = "main" | "history" | "favorites" | "download" | "affiliate" | "help";
 
 export default function Home() {
@@ -67,9 +63,16 @@ export default function Home() {
   const [episodeMenuOpen, setEpisodeMenuOpen] = useState(false);
   const [episodeQuery, setEpisodeQuery] = useState("");
   const [episodesDescending, setEpisodesDescending] = useState(false);
-  const unlocked = false;
+  const [globalUnlocked, setGlobalUnlocked] = useState(false);
+  const [unlockedDramaIds, setUnlockedDramaIds] = useState<Set<string>>(new Set());
+  const unlocked = globalUnlocked || (!!selectedDrama && unlockedDramaIds.has(String(selectedDrama.id)));
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [plan, setPlan] = useState<PlanId>("monthly");
+  const [checkoutEmail, setCheckoutEmail] = useState("");
+  const [checkoutStage, setCheckoutStage] = useState<"select" | "pay">("select");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutInfo, setCheckoutInfo] = useState<{ orderId: string; dramaId: string | null; checkout: CheckoutResult } | null>(null);
   const [toast, setToast] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState("");
   const [playbackLoading, setPlaybackLoading] = useState(false);
@@ -223,6 +226,101 @@ export default function Home() {
     window.setTimeout(() => setToast(""), 2200);
   };
 
+  const openPaywall = () => {
+    setCheckoutStage("select");
+    setCheckoutError("");
+    setPaywallOpen(true);
+  };
+
+  // Returning visitors: if this browser already paid before, restore access
+  // without asking them to pay again.
+  useEffect(() => {
+    const hydrateCheckoutEmail = window.setTimeout(() => {
+      const savedEmail = window.localStorage.getItem("pintumedia_email");
+      if (!savedEmail) return;
+      setCheckoutEmail(savedEmail);
+      fetch(`/api/entitlements/check?email=${encodeURIComponent(savedEmail)}`)
+        .then((response) => response.json() as Promise<{ unlocked: boolean; global?: boolean }>)
+        .then((data) => { if (data.global) setGlobalUnlocked(true); })
+        .catch(() => undefined);
+    }, 0);
+    return () => window.clearTimeout(hydrateCheckoutEmail);
+  }, []);
+
+  // When opening a drama, check whether this email already unlocked this one specifically.
+  useEffect(() => {
+    if (!selectedDrama || globalUnlocked || !checkoutEmail) return;
+    const dramaId = String(selectedDrama.id);
+    if (unlockedDramaIds.has(dramaId)) return;
+    fetch(`/api/entitlements/check?email=${encodeURIComponent(checkoutEmail)}&dramaId=${encodeURIComponent(dramaId)}`)
+      .then((response) => response.json() as Promise<{ unlocked: boolean }>)
+      .then((data) => {
+        if (data.unlocked) setUnlockedDramaIds((current) => new Set(current).add(dramaId));
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDrama, checkoutEmail, globalUnlocked]);
+
+  const handleCheckout = async () => {
+    const email = checkoutEmail.trim();
+    if (!email) { setCheckoutError(t("Email wajib diisi.", "Email is required.")); return; }
+    const dramaId = plan === "series" && selectedDrama ? String(selectedDrama.id) : null;
+    if (plan === "series" && !dramaId) { setCheckoutError(t("Pilih drama dulu.", "Pick a drama first.")); return; }
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: plan, email, dramaId: dramaId ?? undefined }),
+      });
+      const data = (await response.json()) as { orderId?: string; checkout?: CheckoutResult; error?: string };
+      if (!response.ok || !data.orderId || !data.checkout) {
+        throw new Error(data.error || t("Checkout gagal dibuat.", "Checkout could not be created."));
+      }
+      window.localStorage.setItem("pintumedia_email", email);
+      setCheckoutInfo({ orderId: data.orderId, dramaId, checkout: data.checkout });
+      setCheckoutStage("pay");
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : t("Checkout gagal dibuat.", "Checkout could not be created."));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Poll for the LinkQu/Midtrans/Xendit webhook to flip the order to "paid", then
+  // unlock automatically — no manual confirmation needed.
+  useEffect(() => {
+    if (checkoutStage !== "pay" || !checkoutInfo) return;
+    const interval = window.setInterval(async () => {
+      try {
+        const response = await fetch(`/api/orders/status?id=${encodeURIComponent(checkoutInfo.orderId)}`);
+        const data = (await response.json()) as { status?: string };
+        if (data.status === "paid") {
+          window.clearInterval(interval);
+          if (checkoutInfo.dramaId) setUnlockedDramaIds((current) => new Set(current).add(checkoutInfo.dramaId!));
+          else setGlobalUnlocked(true);
+          setPaywallOpen(false);
+          setCheckoutStage("select");
+          setCheckoutInfo(null);
+          notify(t("Pembayaran diterima, episode terbuka!", "Payment received, episodes unlocked!"));
+        } else if (data.status === "failed") {
+          window.clearInterval(interval);
+          setCheckoutError(t("Pembayaran gagal atau kedaluwarsa.", "Payment failed or expired."));
+          setCheckoutStage("select");
+        }
+      } catch {
+        // keep polling; a transient network error shouldn't cancel the wait.
+      }
+    }, 4000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutStage, checkoutInfo]);
+
+  const copyVaNumber = (value: string) => {
+    navigator.clipboard?.writeText(value).then(() => notify(t("Nomor VA disalin.", "VA number copied."))).catch(() => undefined);
+  };
+
   const openDrama = (drama: Drama) => {
     setSelectedDrama(drama);
     setWatchHistory((current) => {
@@ -329,7 +427,7 @@ export default function Home() {
 
   const chooseEpisode = (value: number) => {
     if (value > 5 && !unlocked) {
-      setPaywallOpen(true);
+      openPaywall();
       setEpisodeMenuOpen(false);
       return;
     }
@@ -429,7 +527,7 @@ export default function Home() {
               <button className="watch-back" onClick={backToDetail}><ArrowLeft size={27} /> <span>{t("Kembali", "Back")}</span></button>
               <div className="watch-heading"><strong>{selectedDrama.title}</strong><small>Episode {episode}</small></div>
               <div className="watch-actions">
-                <button className="watch-lock" onClick={() => { if (!unlocked) setPaywallOpen(true); }} aria-label={unlocked ? t("Episode terbuka", "Episodes unlocked") : t("Buka episode premium", "Unlock premium episodes")}><LockKeyhole size={26} /></button>
+                <button className="watch-lock" onClick={() => { if (!unlocked) openPaywall(); }} aria-label={unlocked ? t("Episode terbuka", "Episodes unlocked") : t("Buka episode premium", "Unlock premium episodes")}><LockKeyhole size={26} /></button>
                 <button className="episode-menu-button" onClick={() => setEpisodeMenuOpen(true)} aria-label={t("Buka daftar episode", "Open episode list")} aria-expanded={episodeMenuOpen}><Menu size={31} /></button>
               </div>
             </div>
@@ -510,17 +608,53 @@ export default function Home() {
             <button autoFocus className="modal-close" aria-label={t("Tutup", "Close")} onClick={() => setPaywallOpen(false)}><X /></button>
             <small className="modal-kicker">{t("EPISODE BERIKUTNYA MENANTI", "YOUR NEXT EPISODE AWAITS")}</small>
             <h2 id="unlock-title">{t("Buka semua episode", "Unlock all episodes")}</h2>
-            <p>{t("Episode 1–5 gratis. Pilih akses untuk melanjutkan cerita.", "Episodes 1–5 are free. Choose a plan to continue.")}</p>
-            <div className="plan-list">
-              {Object.entries(plans).map(([id, item]) => <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}><i>{plan === id && <Check size={14} />}</i><span><strong>{t(item.label, id === "series" ? "Unlock this drama" : id === "monthly" ? "Monthly plan" : "7-day plan")}</strong><small>{t(item.meta, id === "series" ? "Lifetime access" : "All dramas")}</small></span><b>{item.price}</b></button>)}
-            </div>
-            <div className="qris-checkout">
-              <div className="qris-summary"><div><small>{t("QRIS · TOKOSWAG", "QRIS · TOKOSWAG")}</small><strong>{selectedDrama?.title}</strong></div><b>{plans[plan].price}</b></div>
-              <p className="qris-preview" role="status">{t("Pratinjau pembayaran. Video belum tersedia untuk pembelian; jangan transfer dulu.", "Payment preview. Videos are not available for purchase yet; please do not transfer funds.")}</p>
-              <Image className="qris-image" src="/payments/qris-tokoswag.jpg" alt={t("QRIS TOKOSWAG, NMID ID1025369150350", "TOKOSWAG QRIS, NMID ID1025369150350")} width={1135} height={1600} unoptimized />
-              <a className="qris-download" href="/payments/qris-tokoswag.jpg" download="PintuMedia-QRIS-TOKOSWAG.jpg"><Download size={17} />{t("Simpan gambar QRIS", "Save QRIS image")}</a>
-              <p className="qris-note">{t("QRIS ini atas nama TOKOSWAG. Menyimpan atau memindai QR tidak membuka episode. Akses diberikan setelah pembayaran terverifikasi.", "This QRIS belongs to TOKOSWAG. Saving or scanning the QR does not unlock episodes. Access is granted after payment verification.")}</p>
-            </div>
+            {checkoutStage === "select" ? (
+              <>
+                <p>{t("Episode 1–5 gratis. Pilih akses untuk melanjutkan cerita.", "Episodes 1–5 are free. Choose a plan to continue.")}</p>
+                <div className="plan-list">
+                  {Object.entries(plans).map(([id, item]) => (
+                    <button className={plan === id ? "selected" : ""} key={id} onClick={() => setPlan(id as PlanId)}>
+                      <i>{plan === id && <Check size={14} />}</i>
+                      <span><strong>{t(item.label, id === "series" ? "Unlock this drama" : id === "monthly" ? "Monthly plan" : "7-day plan")}</strong><small>{t(item.meta, id === "series" ? "Lifetime access" : "All dramas")}</small></span>
+                      <b>{formatIDR(item.amount)}</b>
+                    </button>
+                  ))}
+                </div>
+                <div className="checkout-field">
+                  <label htmlFor="checkout-email">{t("Email untuk menerima akses", "Email to receive access")}</label>
+                  <input id="checkout-email" type="email" inputMode="email" value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} placeholder="nama@email.com" />
+                </div>
+                {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
+                <button className="watch-now wide" disabled={checkoutLoading} onClick={handleCheckout}>
+                  {checkoutLoading ? <Loader2 size={18} className="spin" /> : t("Lanjut bayar", "Continue to pay")}
+                </button>
+              </>
+            ) : checkoutInfo && (() => {
+              const checkout = checkoutInfo.checkout;
+              return (
+                <div className="va-box">
+                  {checkout.method === "virtual_account" ? (
+                    <>
+                      <p className="payment-message">{t("Transfer sesuai nominal ke Virtual Account berikut. Episode terbuka otomatis begitu pembayaran terverifikasi — tidak perlu konfirmasi manual.", "Transfer the exact amount to this Virtual Account. Episodes unlock automatically once payment is verified — no manual confirmation needed.")}</p>
+                      <div className="va-row"><small>{t("Bank", "Bank")}</small><strong>{checkout.bankCode}</strong></div>
+                      <div className="va-row">
+                        <small>{t("Nomor Virtual Account", "Virtual Account number")}</small>
+                        <strong>{checkout.vaNumber}</strong>
+                        <button type="button" className="va-copy" onClick={() => copyVaNumber(checkout.vaNumber)} aria-label={t("Salin nomor VA", "Copy VA number")}><Copy size={16} /></button>
+                      </div>
+                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(plans[plan].amount)}</strong></div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="payment-message">{t("Selesaikan pembayaran di halaman berikut, lalu kembali ke sini — episode terbuka otomatis.", "Finish payment on the next page, then return here — episodes unlock automatically.")}</p>
+                      <a className="watch-now wide" href={checkout.checkoutUrl} target="_blank" rel="noopener noreferrer">{t("Buka halaman pembayaran", "Open payment page")} <ExternalLink size={16} /></a>
+                    </>
+                  )}
+                  <p className="payment-message"><Loader2 size={14} className="spin" /> {t("Menunggu pembayaran...", "Waiting for payment...")}</p>
+                  {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
+                </div>
+              );
+            })()}
           </section>
         </div>
       )}

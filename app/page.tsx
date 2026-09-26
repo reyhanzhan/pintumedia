@@ -1,12 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import Hls from "hls.js";
 import { platforms } from "../lib/platforms";
 import type { Drama } from "../lib/catalog";
 import { DEFAULT_PLANS, formatIDR, type Plan } from "../lib/plans";
 import type { CheckoutResult } from "../lib/payments/provider";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient, isSupabaseConfigured } from "../lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
+import { Poster } from "../components/poster";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
   Check,
@@ -24,6 +28,7 @@ import {
   History,
   ListMusic,
   LogIn,
+  LogOut,
   Smartphone,
   Share2,
   LifeBuoy,
@@ -38,6 +43,8 @@ import {
 } from "lucide-react";
 
 type ProfileView = "main" | "history" | "favorites" | "download" | "affiliate" | "help";
+type AffiliateProfile = { display_name: string | null; referral_code: string };
+type AffiliateSummary = { available: number; thisMonth: number; referrals: number };
 
 export default function Home() {
   const [language, setLanguage] = useState<"id" | "en">("id");
@@ -48,6 +55,10 @@ export default function Home() {
   const [watchHistory, setWatchHistory] = useState<Drama[]>([]);
   const [favoriteDramas, setFavoriteDramas] = useState<Drama[]>([]);
   const [profileNotice, setProfileNotice] = useState("");
+  const [authOpen, setAuthOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [affiliateProfile, setAffiliateProfile] = useState<AffiliateProfile | null>(null);
+  const [affiliateSummary, setAffiliateSummary] = useState<AffiliateSummary | null>(null);
   const t = (id: string, en: string) => language === "id" ? id : en;
   const donationUrl = process.env.NEXT_PUBLIC_DONATION_URL;
   const [platform, setPlatform] = useState("DramaVerse");
@@ -67,6 +78,7 @@ export default function Home() {
   const [unlockedDramaIds, setUnlockedDramaIds] = useState<Set<string>>(new Set());
   const unlocked = globalUnlocked || (!!selectedDrama && unlockedDramaIds.has(String(selectedDrama.id)));
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [recommendedDramas, setRecommendedDramas] = useState<Drama[]>([]);
   const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
   const [plan, setPlan] = useState<string>(DEFAULT_PLANS[0]?.id ?? "");
   const selectedPlan = plans.find((item) => item.id === plan) ?? plans[0];
@@ -90,6 +102,50 @@ export default function Home() {
     document.documentElement.lang = language;
   }, [language]);
 
+  const loadAffiliateData = useCallback(async (currentUser: User) => {
+    const supabase = createClient();
+    const [{ data: profileRow }, { data: commissionRows }] = await Promise.all([
+      supabase.from("profiles").select("display_name, referral_code").eq("id", currentUser.id).maybeSingle(),
+      supabase.from("affiliate_commissions").select("amount, status, created_at").eq("partner_id", currentUser.id),
+    ]);
+    setAffiliateProfile(profileRow ?? null);
+    const rows = commissionRows ?? [];
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const earned = rows.filter((row) => row.status === "available" || row.status === "paid");
+    setAffiliateSummary({
+      available: earned.reduce((sum, row) => sum + row.amount, 0),
+      thisMonth: earned.filter((row) => new Date(row.created_at) >= monthStart).reduce((sum, row) => sum + row.amount, 0),
+      referrals: rows.length,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      if (data.session?.user) void loadAffiliateData(data.session.user);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) void loadAffiliateData(session.user);
+      else {
+        setAffiliateProfile(null);
+        setAffiliateSummary(null);
+      }
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, [loadAffiliateData]);
+
+  const signOut = async () => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    notify(t("Anda telah keluar", "You have signed out"));
+  };
+
   useEffect(() => {
     const hydrateProfileLists = window.setTimeout(() => {
       try {
@@ -103,11 +159,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!platformOpen && !searchOpen && !paywallOpen && !coffeeOpen && !watching) return;
+    if (!platformOpen && !searchOpen && !paywallOpen && !coffeeOpen && !authOpen && !watching) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [platformOpen, searchOpen, paywallOpen, coffeeOpen, watching]);
+  }, [platformOpen, searchOpen, paywallOpen, coffeeOpen, authOpen, watching]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -130,7 +186,7 @@ export default function Home() {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlatformOpen(false); setSearchOpen(false); setPaywallOpen(false);
-        setLanguageOpen(false); setCoffeeOpen(false); setEpisodeMenuOpen(false); setProfileOpen(false);
+        setLanguageOpen(false); setCoffeeOpen(false); setEpisodeMenuOpen(false); setProfileOpen(false); setAuthOpen(false);
       }
     };
     document.addEventListener("keydown", close);
@@ -237,11 +293,13 @@ export default function Home() {
   // Plans (labels, prices, order) can be changed anytime from the admin panel; always show the live list.
   useEffect(() => {
     fetch("/api/settings/public")
-      .then((response) => response.json() as Promise<{ plans: Plan[] }>)
+      .then((response) => response.json() as Promise<{ plans: Plan[]; recommendedDramas?: Drama[] }>)
       .then((data) => {
-        if (!data.plans?.length) return;
-        setPlans(data.plans);
-        setPlan((current) => (data.plans.some((item) => item.id === current) ? current : data.plans[0].id));
+        if (data.plans?.length) {
+          setPlans(data.plans);
+          setPlan((current) => (data.plans.some((item) => item.id === current) ? current : data.plans[0].id));
+        }
+        if (data.recommendedDramas?.length) setRecommendedDramas(data.recommendedDramas);
       })
       .catch(() => undefined);
   }, []);
@@ -351,6 +409,27 @@ export default function Home() {
     setProfileOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  // Deep link from the /rekomendasi page: open the picked drama directly
+  // instead of re-fetching it (recommended items already carry full Drama data).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const rid = params.get("rid");
+    if (!rid) return;
+    const openLinkedDrama = window.setTimeout(() => {
+      openDrama({
+        id: rid,
+        title: params.get("rtitle") || "Drama",
+        poster: params.get("rposter") || "",
+        episodes: Number(params.get("reps")) || 0,
+        sourceProvider: params.get("rprov") || undefined,
+        sourceId: params.get("rsrc") || undefined,
+        synopsis: "",
+      });
+      window.history.replaceState(null, "", window.location.pathname);
+    }, 0);
+    return () => window.clearTimeout(openLinkedDrama);
+  }, []);
 
   const goHome = () => {
     setProfileOpen(false);
@@ -495,7 +574,7 @@ export default function Home() {
     <main className={profileOpen ? "profile-main" : "film-main"}>
       {header}
 
-      {profileOpen && !selectedDrama && <ProfilePage t={t} view={profileView} onView={setProfileView} history={watchHistory} favorites={favoriteDramas} onSelectDrama={selectProfileDrama} onToggleFavorite={toggleFavorite} onBack={backFromProfile} onAffiliateStart={() => setProfileNotice(t("Pendaftaran akun dan affiliate belum aktif. Fitur ini memerlukan autentikasi dan pencatatan komisi PintuMedia.", "Account and affiliate registration are not active yet. This requires PintuMedia authentication and commission tracking."))} notice={profileNotice} />}
+      {profileOpen && !selectedDrama && <ProfilePage t={t} view={profileView} onView={setProfileView} history={watchHistory} favorites={favoriteDramas} onSelectDrama={selectProfileDrama} onToggleFavorite={toggleFavorite} onBack={backFromProfile} onAffiliateStart={() => setAuthOpen(true)} notice={profileNotice} user={user} affiliateProfile={affiliateProfile} affiliateSummary={affiliateSummary} onSignOut={signOut} />}
 
       {!profileOpen && !selectedDrama && (
         <div className="catalog-page" aria-busy={catalogLoading}>
@@ -508,7 +587,15 @@ export default function Home() {
             try { localStorage.setItem("pintumedia.watch-history", JSON.stringify(next)); } catch { /* History is optional. */ }
             return next;
           })} t={t} />}
-          {!!catalog.length && <RecommendationShelf dramas={catalog.slice(0, 6)} provider={platform} onSelect={openDrama} onMore={() => document.getElementById("semua-drama")?.scrollIntoView({ behavior: "smooth", block: "start" })} t={t} />}
+          {!!(recommendedDramas.length || catalog.length) && (
+            <RecommendationShelf
+              dramas={recommendedDramas.length ? recommendedDramas : catalog.slice(0, 6)}
+              curated={!!recommendedDramas.length}
+              provider={platform}
+              onSelect={openDrama}
+              t={t}
+            />
+          )}
           {!!catalog.length && <div id="semua-drama"><DramaShelf title={t("Semua Drama", "All dramas")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog} onSelect={openDrama} showAll /></div>}
           {!!catalog.length && <div ref={catalogSentinelRef} className="catalog-sentinel" aria-live="polite">{catalogLoadingMore ? <><span className="video-spinner" /> {t("Memuat film berikutnya...", "Loading more titles...")}</> : !catalogResult.hasMore ? t("Semua film dari API sudah ditampilkan.", "All titles from the API are displayed.") : null}</div>}
         </div>
@@ -571,7 +658,7 @@ export default function Home() {
         </section>
       )}
 
-      {!profileOpen && <footer className="site-footer"><div className="site-footer-inner"><p>{t("PintuMedia : Request Film Aplikasi", "PintuMedia: Request a movie or app")}</p><a href="https://www.instagram.com/pintumedia.id" target="_blank" rel="noopener noreferrer">{t("By DM", "By DM")} <ExternalLink size={16} aria-hidden="true" /></a><span>© 2026</span></div></footer>}
+      {!profileOpen && <footer className="site-footer"><div className="site-footer-inner"><a href="https://www.instagram.com/pintumedia.id" target="_blank" rel="noopener noreferrer">{t("By Request Film Aplikasi", "By requesting a movie or app")} <ExternalLink size={16} aria-hidden="true" /></a><p>{t("By DM", "By DM")}</p><span>© 2026</span></div></footer>}
 
       {platformOpen && (
         <div className="modal-backdrop platform-backdrop" onMouseDown={() => setPlatformOpen(false)}>
@@ -687,12 +774,14 @@ export default function Home() {
         </section>
       </div>}
 
+      {authOpen && <AuthModal t={t} onClose={() => setAuthOpen(false)} onAuthenticated={() => notify(t("Berhasil masuk", "Signed in successfully"))} />}
+
       {toast && <div className="toast">{toast}</div>}
     </main>
   );
 }
 
-function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onToggleFavorite, onBack, onAffiliateStart, notice }: {
+function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onToggleFavorite, onBack, onAffiliateStart, notice, user, affiliateProfile, affiliateSummary, onSignOut }: {
   t: (id: string, en: string) => string;
   view: ProfileView;
   onView: (view: ProfileView) => void;
@@ -703,6 +792,10 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
   onBack: () => void;
   onAffiliateStart: () => void;
   notice: string;
+  user: User | null;
+  affiliateProfile: AffiliateProfile | null;
+  affiliateSummary: AffiliateSummary | null;
+  onSignOut: () => void;
 }) {
   const helpMessage = encodeURIComponent("Halo PintuMedia, saya butuh bantuan.");
   const whatsappUrl = `https://wa.me/?text=${helpMessage}`;
@@ -721,8 +814,8 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
   const emptyText = view === "history" ? t("Drama yang kamu tonton akan muncul di sini.", "Dramas you watch will appear here.") : t("Belum ada drama favorit. Tekan ikon hati pada halaman drama untuk menyimpannya.", "No favorite dramas yet. Use the heart on a drama page to save it.");
   return <section className={`profile-page profile-view-${view}`} aria-label={titleByView[view]}>
     {view === "main" && <button className="profile-mobile-return" onClick={onBack}><ArrowLeft size={18} />{t("Kembali ke film", "Back to films")}</button>}
-    {view === "main" && <><div className="profile-account-card"><div className="profile-user"><span className="profile-avatar">G</span><div><strong>Guest</strong><small>—</small></div><button onClick={onAffiliateStart}><LogIn size={16} />{t("Masuk", "Sign in")}</button></div>
-    <div className="profile-login-banner"><strong>{t("Mulai Nonton di PintuMedia", "Start Watching on PintuMedia")}</strong><span>{t("Akun dan sinkronisasi tontonan segera tersedia.", "Accounts and watch syncing are coming soon.")}</span></div></div>{notice && <p className="affiliate-notice" role="status">{notice}</p>}</>}
+    {view === "main" && <><div className="profile-account-card"><div className="profile-user"><span className="profile-avatar">{(user ? (affiliateProfile?.display_name || user.email || "?") : "Guest")[0].toUpperCase()}</span><div><strong>{user ? (affiliateProfile?.display_name || user.email) : "Guest"}</strong><small>{user ? t("Anggota PintuMedia", "PintuMedia member") : "—"}</small></div>{user ? <button onClick={onSignOut}><LogOut size={16} />{t("Keluar", "Sign out")}</button> : <button onClick={onAffiliateStart}><LogIn size={16} />{t("Masuk", "Sign in")}</button>}</div>
+    {!user && <div className="profile-login-banner"><strong>{t("Mulai Nonton di PintuMedia", "Start Watching on PintuMedia")}</strong><span>{t("Masuk untuk mendapatkan link referral dan melacak komisi affiliate.", "Sign in to get your referral link and track affiliate commission.")}</span></div>}</div>{notice && <p className="affiliate-notice" role="status">{notice}</p>}</>}
     <div className="profile-heading"><button className="profile-back" onClick={onBack} aria-label={view === "main" ? t("Kembali ke film", "Back to films") : t("Kembali", "Back")}><ArrowLeft size={24} /></button><div><span className="profile-kicker">PINTUMEDIA</span><h1>{titleByView[view]}</h1></div></div>
     {view === "main" && <div className="profile-card-list">
       {items.map(({ view: target, label, icon: Icon }) => <button className="profile-menu-card" key={target} onClick={() => onView(target)}><span className="profile-menu-icon"><Icon size={25} /></span><strong>{label}</strong><ArrowRight size={22} /></button>)}
@@ -732,7 +825,7 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
       {list.map((drama) => <div className="profile-drama-row" key={drama.id}><button className="profile-drama-open" onClick={() => onSelectDrama(drama)}><span><Poster drama={drama} /></span><strong>{drama.title}</strong><ArrowRight size={20} /></button>{view === "favorites" && <button className="profile-remove-favorite" aria-label={t("Hapus dari favorit", "Remove from favorites")} onClick={() => onToggleFavorite(drama)}><Heart size={19} fill="currentColor" /></button>}</div>)}
     </div>}
     {view === "download" && <div className="profile-info-panel"><span className="profile-info-icon"><Smartphone size={42} /></span><h2>{t("Akses PintuMedia dari layar utama", "Access PintuMedia from your home screen")}</h2><p>{t("Gunakan menu browser lalu pilih Tambahkan ke Layar Utama. Ini membuat pintasan situs; aplikasi native belum tersedia.", "Open your browser menu and choose Add to Home Screen. This creates a website shortcut; a native app is not available yet.")}</p></div>}
-    {view === "affiliate" && <AffiliatePage t={t} onStart={onAffiliateStart} notice={notice} />}
+    {view === "affiliate" && <AffiliatePage t={t} onStart={onAffiliateStart} notice={notice} user={user} profile={affiliateProfile} summary={affiliateSummary} />}
     {view === "help" && <div className="profile-info-panel profile-support-panel"><span className="profile-info-icon"><LifeBuoy size={42} /></span><h2>{t("Hubungi Customer Service", "Contact Customer Service")}</h2><p>{t("Pilih kanal bantuan. Pesan awal sudah disiapkan, kamu bisa menambahkan detail pertanyaan sebelum mengirim.", "Choose a support channel. A starter message is ready; add the details of your question before sending.")}</p><div className="profile-help-actions"><a href={whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp CS</a><a href={telegramUrl} target="_blank" rel="noopener noreferrer">Telegram CS</a></div></div>}
   </section>;
 }
@@ -752,52 +845,158 @@ function ContinueWatching({ dramas, onSelect, onRemove, t }: { dramas: Drama[]; 
   </section>;
 }
 
-function RecommendationShelf({ dramas, provider, onSelect, onMore, t }: { dramas: Drama[]; provider: string; onSelect: (drama: Drama) => void; onMore: () => void; t: (id: string, en: string) => string }) {
+function RecommendationShelf({ dramas, provider, curated, onSelect, t }: { dramas: Drama[]; provider: string; curated: boolean; onSelect: (drama: Drama) => void; t: (id: string, en: string) => string }) {
   return <section className="recommendation-section" aria-label={t("Rekomendasi", "Recommendations")}>
     <div className="recommendation-heading">
       <span className="recommendation-icon"><Sparkles size={24} /></span>
-      <div><h2>{t("Rekomendasi", "Recommendations")}</h2><p>{t(`Pilihan drama pendek untukmu di ${provider}`, `Short-drama picks for you on ${provider}`)}</p></div>
-      <button onClick={onMore}>{t("Selengkapnya", "View all")} <ChevronRight size={18} /></button>
+      <div><h2>{t("Rekomendasi", "Recommendations")}</h2><p>{curated ? t("Pilihan tim PintuMedia untukmu", "Picked for you by the PintuMedia team") : t(`Pilihan drama pendek untukmu di ${provider}`, `Short-drama picks for you on ${provider}`)}</p></div>
+      <Link href="/rekomendasi">{t("Selengkapnya", "View all")} <ChevronRight size={18} /></Link>
     </div>
     <div className="drama-grid recommendation-grid">
-      {dramas.map((drama) => <button className="drama-card" key={drama.id} onClick={() => onSelect(drama)}>
-        <span className="poster-wrap"><Poster drama={drama} /><b className="recommendation-hot">HOT</b><small className="recommendation-provider">{provider}</small>{drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}<em><Play size={23} fill="currentColor" /></em></span>
-        <strong>{drama.title}</strong>
-      </button>)}
+      {dramas.map((drama) => {
+        const providerLabel = curated ? (platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? provider) : provider;
+        return <button className="drama-card" key={drama.id} onClick={() => onSelect(drama)}>
+          <span className="poster-wrap"><Poster drama={drama} /><b className="recommendation-hot">HOT</b><small className="recommendation-provider">{providerLabel}</small>{drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}<em><Play size={23} fill="currentColor" /></em></span>
+          <strong>{drama.title}</strong>
+        </button>;
+      })}
     </div>
   </section>;
 }
 
-function AffiliatePage({ t, onStart, notice }: { t: (id: string, en: string) => string; onStart: () => void; notice: string }) {
+function AffiliatePage({ t, onStart, notice, user, profile, summary }: {
+  t: (id: string, en: string) => string;
+  onStart: () => void;
+  notice: string;
+  user: User | null;
+  profile: AffiliateProfile | null;
+  summary: AffiliateSummary | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (user && profile) {
+    const referralLink = typeof window !== "undefined" ? `${window.location.origin}/?ref=${profile.referral_code}` : `https://pintumedia.my.id/?ref=${profile.referral_code}`;
+    const data = summary ?? { available: 0, thisMonth: 0, referrals: 0 };
+    const copyLink = () => {
+      navigator.clipboard?.writeText(referralLink).then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      }).catch(() => undefined);
+    };
+    return <div className="affiliate-page">
+      <div className="affiliate-hero"><div className="affiliate-art"><Share2 size={58} /><span>✦　✦　✦</span></div><h2>{t("Bagikan link referral Anda dan dapatkan komisi 20%", "Share your referral link and earn 20% commission")}</h2></div>
+      <div className="affiliate-dashboard">
+        <div className="affiliate-stat"><small>{t("Komisi tersedia", "Available commission")}</small><strong>{formatIDR(data.available)}</strong></div>
+        <div className="affiliate-stat"><small>{t("Bulan ini", "This month")}</small><strong>{formatIDR(data.thisMonth)}</strong></div>
+        <div className="affiliate-stat"><small>{t("Referral berhasil", "Successful referrals")}</small><strong>{data.referrals}</strong></div>
+      </div>
+      <div className="affiliate-link-row">
+        <input readOnly value={referralLink} onFocus={(event) => event.target.select()} />
+        <button type="button" onClick={copyLink}><Copy size={16} />{copied ? t("Tersalin", "Copied") : t("Salin", "Copy")}</button>
+      </div>
+      {notice && <p className="affiliate-notice" role="status">{notice}</p>}
+    </div>;
+  }
   const steps = [
     { title: t("Daftar Akun", "Create an Account"), copy: t("Pendaftaran akun gratis", "Free account registration"), icon: UserRoundPlus },
     { title: t("Bagikan Link Referral", "Share Your Referral Link"), copy: t("Sebarkan link referral ke berbagai sosial media", "Share your referral link on social media"), icon: Share2 },
     { title: t("Dapatkan Komisi", "Earn Commission"), copy: t("Komisi mengikuti ketentuan resmi PintuMedia", "Commission follows PintuMedia's official terms"), icon: BadgeDollarSign },
   ];
   return <div className="affiliate-page">
-    <div className="affiliate-hero"><div className="affiliate-art"><Share2 size={58} /><span>✦　✦　✦</span></div><h2>{t("Bagikan PintuMedia dan dapatkan komisi setelah program resmi dibuka", "Share PintuMedia and earn commission once the program officially launches")}</h2></div>
+    <div className="affiliate-hero"><div className="affiliate-art"><Share2 size={58} /><span>✦　✦　✦</span></div><h2>{t("Bagikan PintuMedia dan dapatkan komisi 20% dari referral Anda", "Share PintuMedia and earn 20% commission from your referrals")}</h2></div>
     <h3>{t("Cukup 3 Langkah", "Just 3 Steps")}</h3>
     <div className="affiliate-steps">{steps.map(({ title, copy, icon: Icon }, index) => <article key={title}><span className="affiliate-step-icon"><Icon size={28} /></span><strong>{title}</strong><small>{copy}</small><i>0{index + 1}</i></article>)}</div>
-    <button className="affiliate-join" onClick={onStart}>{t("Mulai Jadi Affiliate", "Become an Affiliate")}</button>
-    <p className="affiliate-disclaimer">{t("Program referral PintuMedia belum aktif. Link referral, komisi, dan pembayaran akan tersedia setelah backend akun dan aturan program disiapkan.", "PintuMedia referrals are not active yet. Referral links, commissions, and payouts will be available after account backend and program terms are set up.")}</p>
+    <button className="affiliate-join" onClick={onStart}>{t("Masuk / Daftar untuk Mulai", "Sign In / Register to Start")}</button>
+    <p className="affiliate-disclaimer">{t("Masuk atau buat akun PintuMedia untuk mendapatkan link referral pribadi dan melacak komisi Anda secara real-time.", "Sign in or create a PintuMedia account to get your personal referral link and track commission in real time.")}</p>
     {notice && <p className="affiliate-notice" role="status">{notice}</p>}
   </div>;
 }
 
-function Poster({ drama }: { drama: Drama }) {
-  const [failed, setFailed] = useState(false);
-  if (drama.spriteX !== undefined) {
-    return <span className="poster-crop" role="img" aria-label={drama.title} style={{
-      backgroundImage: `url("${drama.poster}")`,
-      backgroundSize: `${1861 / 228 * 100}% ${871 / 342 * 100}%`,
-      backgroundPosition: `${drama.spriteX / (1861 - 228) * 100}% ${291 / (871 - 342) * 100}%`,
-    }} />;
-  }
-  if (failed || !drama.poster) {
-    return <span className="poster-fallback" role="img" aria-label={drama.title}><b>{drama.title.charAt(0).toUpperCase()}</b><small>PintuMedia</small></span>;
-  }
-  const bypassOptimizer = /^https?:\/\//i.test(drama.poster) || drama.poster.startsWith("/api/nunodrama/image");
-  return <Image src={drama.poster} alt={drama.title} fill sizes="(max-width: 600px) 31vw, (max-width: 1080px) 23vw, 13vw" unoptimized={bypassOptimizer} onError={() => setFailed(true)} />;
+function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string) => string; onClose: () => void; onAuthenticated: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+    if (!isSupabaseConfigured()) {
+      setError(t("Autentikasi belum dikonfigurasi. Hubungi admin PintuMedia.", "Authentication is not configured yet. Contact the PintuMedia admin."));
+      return;
+    }
+    setPending(true);
+    const supabase = createClient();
+    try {
+      if (mode === "login") {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+        onAuthenticated();
+        onClose();
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { name: name || undefined } },
+        });
+        if (signUpError) throw signUpError;
+        if (data.session) {
+          onAuthenticated();
+          onClose();
+        } else {
+          setNotice(t("Akun dibuat. Cek email Anda untuk konfirmasi sebelum masuk.", "Account created. Check your email to confirm before signing in."));
+        }
+      }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : t("Terjadi kesalahan, coba lagi.", "Something went wrong, please try again."));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section className="paywall auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button autoFocus className="modal-close" aria-label={t("Tutup", "Close")} onClick={onClose}><X /></button>
+        <small className="modal-kicker">{mode === "login" ? t("SELAMAT DATANG KEMBALI", "WELCOME BACK") : t("BERGABUNG DENGAN PINTUMEDIA", "JOIN PINTUMEDIA")}</small>
+        <h2 id="auth-title">{mode === "login" ? t("Masuk ke akun", "Sign in") : t("Buat akun", "Create account")}</h2>
+        <p>{mode === "login" ? t("Masuk untuk mendapatkan link referral dan memantau komisi affiliate Anda.", "Sign in to get your referral link and track your affiliate commission.") : t("Daftar untuk mendapatkan link referral dan mulai mengumpulkan komisi.", "Register to get a referral link and start earning commission.")}</p>
+        <form onSubmit={submit}>
+          {mode === "register" && (
+            <div className="checkout-field">
+              <label htmlFor="auth-name">{t("Nama", "Name")}</label>
+              <input id="auth-name" value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Nama Anda", "Your name")} autoComplete="name" />
+            </div>
+          )}
+          <div className="checkout-field">
+            <label htmlFor="auth-email">{t("Email", "Email")}</label>
+            <input id="auth-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nama@email.com" autoComplete="email" />
+          </div>
+          <div className="checkout-field">
+            <label htmlFor="auth-password">{t("Kata sandi", "Password")}</label>
+            <input id="auth-password" type="password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("Minimal 6 karakter", "At least 6 characters")} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+          </div>
+          {error && <p className="checkout-error" role="alert">{error}</p>}
+          {notice && <p className="affiliate-notice" role="status">{notice}</p>}
+          <button type="submit" className="watch-now wide" disabled={pending}>{pending ? <Loader2 size={18} className="spin" /> : mode === "login" ? t("Masuk", "Sign in") : t("Daftar", "Register")}</button>
+        </form>
+        <button
+          type="button"
+          className="auth-switch"
+          onClick={() => {
+            setMode(mode === "login" ? "register" : "login");
+            setError("");
+            setNotice("");
+          }}
+        >
+          {mode === "login" ? t("Belum punya akun? Daftar", "No account yet? Register") : t("Sudah punya akun? Masuk", "Already have an account? Sign in")}
+        </button>
+      </section>
+    </div>
+  );
 }
 
 function HlsVideo({ src, onError }: { src: string; onError: () => void }) {

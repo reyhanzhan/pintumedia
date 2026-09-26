@@ -5,5 +5,5 @@ import { getSettings } from "@/lib/settings";
 // Never expose freeEmails/secrets/paymentProvider here.
 export async function GET() {
   const settings = await getSettings();
-  return NextResponse.json({ plans: settings.plans });
+  return NextResponse.json({ plans: settings.plans, recommendedDramas: settings.recommendedDramas });
 }

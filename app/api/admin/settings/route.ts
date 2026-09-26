@@ -14,18 +14,30 @@ const planSchema = z.object({
   durationDays: z.number().int().min(1).max(3650).nullable(),
 });
 
+const recommendedDramaSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  title: z.string().trim().min(1).max(200),
+  episodes: z.number().int().min(0),
+  poster: z.string().max(2000),
+  spriteX: z.number().optional(),
+  synopsis: z.string().max(2000).optional().default(""),
+  sourceProvider: z.string().max(80).optional(),
+  sourceId: z.string().max(200).optional(),
+});
+
 const updateSchema = z.object({
   plans: z.array(planSchema).max(50),
   freeEmails: z.array(z.string().trim().email()).max(10),
   paymentProvider: z.enum(["", "midtrans", "xendit", "linkqu"]),
   secrets: z.record(z.string(), z.string()),
+  recommendedDramas: z.array(recommendedDramaSchema).max(30),
 });
 
 export async function GET() {
   if (!(await isAdminRequest())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { data, error } = await createAdminClient()
     .from("app_settings")
-    .select("plans,free_emails,payment_provider,secrets")
+    .select("plans,free_emails,payment_provider,secrets,recommended_dramas")
     .eq("id", "default")
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -34,6 +46,7 @@ export async function GET() {
     freeEmails: data?.free_emails ?? [],
     paymentProvider: data?.payment_provider ?? "",
     secrets: data?.secrets ?? {},
+    recommendedDramas: data?.recommended_dramas ?? [],
   });
 }
 
@@ -53,6 +66,7 @@ export async function PUT(request: Request) {
         free_emails: [...new Set(input.freeEmails.map((email) => email.toLowerCase()))],
         payment_provider: input.paymentProvider,
         secrets: filteredSecrets,
+        recommended_dramas: input.recommendedDramas,
         updated_at: new Date().toISOString(),
       })
       .eq("id", "default");

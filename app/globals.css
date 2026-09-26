@@ -59,6 +59,7 @@ button { color: inherit; }
   font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.02em;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -119,7 +120,7 @@ button { color: inherit; }
 .section-head button { display: flex; align-items: center; gap: 8px; padding: 5px 0; border: 0; background: transparent; color: #0aafe6; font-size: clamp(14px, 1.18vw, 22px); font-weight: 500; cursor: pointer; }
 
 .drama-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: clamp(18px, 1.3vw, 24px); }
-.drama-card { min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.drama-card { display: block; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; text-decoration: none; cursor: pointer; }
 .poster-wrap {
   position: relative;
   display: block;
@@ -173,8 +174,8 @@ button { color: inherit; }
 .recommendation-icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 15px; background: linear-gradient(145deg, #463669, #25213d); color: #d090ff; }
 .recommendation-heading h2 { margin: 0 0 4px; font-size: clamp(26px, 1.935vw, 36px); line-height: 1.1; letter-spacing: -0.025em; }
 .recommendation-heading p { max-width: 370px; margin: 0; color: #9aa5b6; font-size: clamp(13px, 1.08vw, 18px); line-height: 1.3; }
-.recommendation-heading button { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 18px; border: 1px solid rgba(183, 104, 255, .55); border-radius: 999px; background: rgba(79, 46, 120, .2); color: #d59aff; font-size: 15px; font-weight: 700; cursor: pointer; }
-.recommendation-heading button:hover { background: rgba(105, 55, 162, .42); }
+.recommendation-heading a { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 18px; border: 1px solid rgba(183, 104, 255, .55); border-radius: 999px; background: rgba(79, 46, 120, .2); color: #d59aff; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer; }
+.recommendation-heading a:hover { background: rgba(105, 55, 162, .42); }
 .recommendation-grid .poster-wrap { border-radius: clamp(22px, 2.25vw, 42px); }
 .recommendation-hot, .recommendation-provider { position: absolute; z-index: 3; top: 10px; padding: 4px 7px; border-radius: 6px; color: #fff; font-size: 10px; font-weight: 900; line-height: 1; }
 .recommendation-hot { left: 10px; border-radius: 8px; background: #e52e2e; }
@@ -261,7 +262,7 @@ button { color: inherit; }
 .profile-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
 .profile-heading h1 { margin: 3px 0 0; font-size: clamp(30px, 2.4vw, 42px); letter-spacing: -.03em; }
 .profile-kicker { color: #13bde9; font-size: 12px; font-weight: 800; letter-spacing: .16em; }
-.profile-back { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer; }
+.profile-back { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: inherit; text-decoration: none; cursor: pointer; }
 .profile-mobile-return { display: none; }
 .profile-card-list { width: min(100%, 624px); display: grid; gap: 18px; }
 .profile-menu-card { min-height: 80px; display: grid; grid-template-columns: 54px 1fr 20px; align-items: center; gap: 18px; padding: 12px 24px; border: 1px solid rgba(191, 173, 210, .45); border-radius: 10px; background: #332d3c; color: #eeeaf2; text-align: left; cursor: pointer; }
@@ -316,6 +317,16 @@ button { color: inherit; }
 .affiliate-join:hover { background: #e00072; }
 .affiliate-notice, .affiliate-disclaimer { width: 100%; margin: 0; padding: 13px 16px; border: 1px solid rgba(244,187,70,.28); border-radius: 12px; background: rgba(244,187,70,.08); color: #e7d29b; font-size: 13px; line-height: 1.6; text-align: center; }
 .affiliate-disclaimer { color: #aaa2b3; border-color: rgba(191,173,210,.22); background: rgba(43,37,49,.7); }
+.affiliate-dashboard { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.affiliate-stat { display: grid; gap: 6px; padding: 18px 14px; border: 1px solid rgba(191,173,210,.3); border-radius: 14px; background: #2b2531; text-align: center; }
+.affiliate-stat small { color: #a99eae; font-size: 12px; }
+.affiliate-stat strong { font-size: 20px; color: var(--gold); }
+.affiliate-link-row { width: 100%; display: flex; gap: 8px; }
+.affiliate-link-row input { min-width: 0; flex: 1; height: 46px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.03); color: white; font-size: 14px; }
+.affiliate-link-row button { display: flex; align-items: center; gap: 6px; padding: 0 16px; border: 0; border-radius: 10px; background: #c40062; color: white; font-weight: 700; cursor: pointer; }
+.affiliate-link-row button:hover { background: #e00072; }
+@media (max-width: 560px) { .affiliate-dashboard { grid-template-columns: 1fr; } .affiliate-link-row { flex-direction: column; } }
+.auth-switch { width: 100%; margin-top: 16px; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: underline; text-align: center; }
 
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 14px; background: rgba(1, 7, 15, 0.82); backdrop-filter: blur(9px); }
 .platform-picker { position: relative; display: flex; flex-direction: column; width: min(980px, 95vw); max-height: 82dvh; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.035); border-radius: 23px; background: #1d2939; box-shadow: 0 28px 70px rgba(0, 0, 0, 0.38); }
@@ -419,8 +430,8 @@ button { color: inherit; }
   .recommendation-icon svg { width: 19px; height: 19px; }
   .recommendation-heading h2 { margin-bottom: 3px; font-size: 18px; line-height: 25px; white-space: nowrap; }
   .recommendation-heading p { font-size: 11px; }
-  .recommendation-heading button { grid-column: 3; grid-row: 1; width: 128px; min-height: 30px; justify-content: center; padding: 0 8px; font-size: 12px; }
-  .recommendation-heading button svg { width: 15px; height: 15px; }
+  .recommendation-heading a { grid-column: 3; grid-row: 1; width: 128px; min-height: 30px; justify-content: center; padding: 0 8px; font-size: 12px; }
+  .recommendation-heading a svg { width: 15px; height: 15px; }
   .recommendation-grid { width: calc(100% - 6px); grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .recommendation-grid .poster-wrap { border-radius: 24px; }
   .recommendation-grid .drama-card > strong { margin-top: 10px; }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createCheckout } from "@/lib/payments/provider";
 import { getSettings } from "@/lib/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 const inputSchema = z.object({
   planId: z.string().min(1),
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
       settings,
     );
     const supabase = createAdminClient();
+    const sessionClient = await createClient();
+    const { data: { user } } = await sessionClient.auth.getUser();
     let referrerProfileId: string | null = null;
     if (input.referralCode) {
       const { data } = await supabase.from("profiles").select("id").eq("referral_code", input.referralCode).maybeSingle();
@@ -35,6 +38,7 @@ export async function POST(request: Request) {
     }
     const { error } = await supabase.from("orders").insert({
       id: orderId,
+      user_id: user?.id ?? null,
       email: input.email,
       referrer_profile_id: referrerProfileId,
       plan_id: plan.id,

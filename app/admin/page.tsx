@@ -4,6 +4,8 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { SECRET_FIELD_GROUPS, type SecretField } from "@/lib/secret-fields";
 import { DEFAULT_PLANS, type Plan } from "@/lib/plans";
+import type { Drama } from "@/lib/catalog";
+import { platforms } from "@/lib/platforms";
 
 type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu";
 type Secrets = Partial<Record<SecretField, string>>;
@@ -30,6 +32,12 @@ export default function AdminPage() {
   const [newEmail, setNewEmail] = useState("");
   const [paymentProvider, setPaymentProvider] = useState<PaymentProvider>("");
   const [secrets, setSecrets] = useState<Secrets>({});
+  const [recommendedDramas, setRecommendedDramas] = useState<Drama[]>([]);
+  const [recPlatform, setRecPlatform] = useState(platforms[0]?.slug ?? "nunomix");
+  const [recQuery, setRecQuery] = useState("");
+  const [recResults, setRecResults] = useState<Drama[]>([]);
+  const [recSearching, setRecSearching] = useState(false);
+  const [recError, setRecError] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -38,18 +46,57 @@ export default function AdminPage() {
           router.replace("/admin/login");
           throw new Error("unauthorized");
         }
-        return response.json() as Promise<{ plans: Plan[]; freeEmails: string[]; paymentProvider: PaymentProvider; secrets: Secrets }>;
+        return response.json() as Promise<{ plans: Plan[]; freeEmails: string[]; paymentProvider: PaymentProvider; secrets: Secrets; recommendedDramas: Drama[] }>;
       })
       .then((data) => {
         setPlans(data.plans);
         setFreeEmails(data.freeEmails);
         setPaymentProvider(data.paymentProvider);
         setSecrets(data.secrets);
+        setRecommendedDramas(data.recommendedDramas ?? []);
       })
       .catch(() => undefined)
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const searchRecommendCatalog = async () => {
+    setRecSearching(true);
+    setRecError("");
+    try {
+      const response = await fetch(`/api/catalog?platform=${encodeURIComponent(recPlatform)}&language=in&page=1`);
+      const data = (await response.json()) as { dramas?: Drama[]; error?: string };
+      if (!response.ok) throw new Error(data.error || "Katalog tidak tersedia.");
+      const query = recQuery.trim().toLowerCase();
+      const dramas = data.dramas ?? [];
+      setRecResults(query ? dramas.filter((item) => item.title.toLowerCase().includes(query)) : dramas);
+    } catch (err) {
+      setRecError(err instanceof Error ? err.message : "Katalog tidak tersedia.");
+      setRecResults([]);
+    } finally {
+      setRecSearching(false);
+    }
+  };
+
+  const addRecommended = (drama: Drama) => {
+    setRecommendedDramas((current) => {
+      if (current.some((item) => String(item.id) === String(drama.id))) return current;
+      if (current.length >= 30) { setRecError("Maksimal 30 drama rekomendasi."); return current; }
+      return [...current, drama];
+    });
+  };
+
+  const removeRecommended = (index: number) => setRecommendedDramas((current) => current.filter((_, i) => i !== index));
+
+  const moveRecommended = (index: number, direction: -1 | 1) => {
+    setRecommendedDramas((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
 
   const updatePlan = (index: number, patch: Partial<Plan>) => {
     setPlans((current) => current.map((plan, i) => (i === index ? { ...plan, ...patch } : plan)));
@@ -86,7 +133,7 @@ export default function AdminPage() {
       const response = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plans, freeEmails, paymentProvider, secrets }),
+        body: JSON.stringify({ plans, freeEmails, paymentProvider, secrets, recommendedDramas }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan.");
@@ -173,6 +220,60 @@ export default function AdminPage() {
         <button type="button" onClick={() => setPlans((current) => [...current, newBlankPlan()])} style={styles.addButton}>
           + Tambah Paket
         </button>
+      </section>
+
+      <section style={styles.card}>
+        <h2 style={styles.h2}>Rekomendasi Homepage (maks 30)</h2>
+        <p style={{ margin: 0, color: "#8e9bb0", fontSize: 13 }}>Pilih drama tertentu untuk ditampilkan di bagian &quot;Rekomendasi&quot; halaman utama. Kalau kosong, situs otomatis memakai drama teratas dari katalog.</p>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select value={recPlatform} onChange={(event) => setRecPlatform(event.target.value)} style={{ ...styles.input, flex: "0 0 180px" }}>
+            {platforms.map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}
+          </select>
+          <input
+            value={recQuery}
+            onChange={(event) => setRecQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void searchRecommendCatalog(); } }}
+            placeholder="Cari judul drama..."
+            style={{ ...styles.input, flex: 1, minWidth: 160 }}
+          />
+          <button type="button" onClick={() => void searchRecommendCatalog()} disabled={recSearching} style={styles.addButton}>
+            {recSearching ? "Mencari..." : "Cari"}
+          </button>
+        </div>
+        {recError && <p style={{ color: "#ff8a8a", margin: 0, fontSize: 13 }}>{recError}</p>}
+        {!!recResults.length && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
+            {recResults.map((drama) => {
+              const already = recommendedDramas.some((item) => String(item.id) === String(drama.id));
+              return (
+                <div key={String(drama.id)} style={{ display: "grid", gap: 6 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={drama.poster} alt={drama.title} style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover", borderRadius: 8, background: "#1b2333" }} />
+                  <small style={{ fontSize: 12, lineHeight: 1.3 }}>{drama.title}</small>
+                  <button type="button" disabled={already} onClick={() => addRecommended(drama)} style={{ ...styles.addButton, height: 32, fontSize: 12, opacity: already ? 0.5 : 1 }}>
+                    {already ? "Sudah ditambah" : "+ Tambah"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <h3 style={{ margin: "8px 0 0", fontSize: 14, color: "#8e9bb0" }}>Terpilih ({recommendedDramas.length})</h3>
+        {!recommendedDramas.length && <p style={{ color: "#8e9bb0", fontSize: 13, margin: 0 }}>Belum ada drama dipilih.</p>}
+        {recommendedDramas.map((drama, index) => (
+          <div key={String(drama.id)} style={styles.emailRow}>
+            <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={drama.poster} alt={drama.title} style={{ width: 32, height: 48, objectFit: "cover", borderRadius: 4, flex: "none" }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{drama.title}</span>
+            </span>
+            <span style={{ display: "flex", gap: 6, flex: "none" }}>
+              <button type="button" onClick={() => moveRecommended(index, -1)} disabled={index === 0} style={styles.moveButton} aria-label="Naikkan urutan">↑</button>
+              <button type="button" onClick={() => moveRecommended(index, 1)} disabled={index === recommendedDramas.length - 1} style={styles.moveButton} aria-label="Turunkan urutan">↓</button>
+              <button type="button" onClick={() => removeRecommended(index)} style={styles.removeButton}>Hapus</button>
+            </span>
+          </div>
+        ))}
       </section>
 
       <section style={styles.card}>

@@ -253,11 +253,11 @@ button { color: inherit; }
 .profile-page { width: var(--content-width); min-height: calc(100vh - 88px); margin: 0 auto; padding: 58px 0 90px; }
 .profile-account-card { width: min(100%, 624px); }
 .profile-user { width: min(100%, 624px); display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #e8e2ee; }
-.profile-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #5b5366; color: #f2edf4; font-weight: 800; }
+.profile-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #000; color: #f2edf4; font-weight: 800; }
 .profile-user div { display: grid; gap: 2px; }
 .profile-user small { color: #a49aab; }
 .profile-user a { margin-left: auto; color: #e60073; font-weight: 800; text-decoration: none; }
-.profile-login-banner { width: min(100%, 624px); display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding: 13px 16px; border: 1px solid rgba(191, 173, 210, .25); border-radius: 12px; background: #2b2432; color: #d4ccd9; }
+.profile-login-banner { width: min(100%, 624px); display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding: 13px 16px; border: 1px solid rgba(191, 173, 210, .25); border-radius: 12px; background: #000; color: #d4ccd9; }
 .profile-login-banner span { color: #a99eae; font-size: 13px; text-align: right; }
 .profile-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; }
 .profile-heading h1 { margin: 3px 0 0; font-size: clamp(30px, 2.4vw, 42px); letter-spacing: -.03em; }
@@ -316,7 +316,7 @@ button { color: inherit; }
 .affiliate-join { min-width: 230px; min-height: 54px; margin: 3px 0; padding: 0 27px; border: 0; border-radius: 12px; background: #c40062; color: white; font-size: 17px; font-weight: 700; cursor: pointer; }
 .affiliate-join:hover { background: #e00072; }
 .affiliate-notice, .affiliate-disclaimer { width: 100%; margin: 0; padding: 13px 16px; border: 1px solid rgba(244,187,70,.28); border-radius: 12px; background: rgba(244,187,70,.08); color: #e7d29b; font-size: 13px; line-height: 1.6; text-align: center; }
-.affiliate-disclaimer { color: #aaa2b3; border-color: rgba(191,173,210,.22); background: rgba(43,37,49,.7); }
+.affiliate-disclaimer { color: #aaa2b3; border-color: rgba(191,173,210,.22); background: rgba(0,0,0,.7); }
 .affiliate-dashboard { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .affiliate-stat { display: grid; gap: 6px; padding: 18px 14px; border: 1px solid rgba(191,173,210,.3); border-radius: 14px; background: #2b2531; text-align: center; }
 .affiliate-stat small { color: #a99eae; font-size: 12px; }
@@ -441,13 +441,13 @@ button { color: inherit; }
   .profile-page { width: 100%; min-height: calc(100dvh - 56px); padding: 10px 16px 76px; background: #252027; }
   .profile-mobile-return { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 0 4px; border: 0; background: transparent; color: #e8e2ee; font-size: 13px; font-weight: 700; cursor: pointer; }
   .profile-mobile-return:focus-visible, .profile-back:focus-visible { outline: 2px solid #17bde8; outline-offset: 3px; }
-  .profile-account-card { min-height: 211px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 33px; padding: 16px; border: 1px solid #958b9c; border-radius: 13px; background: radial-gradient(circle at 15% 0%, #30294a, #28232d 55%, #302137); }
+  .profile-account-card { min-height: 211px; display: flex; flex-direction: column; justify-content: space-between; margin-bottom: 33px; padding: 16px; border: 1px solid #958b9c; border-radius: 13px; background: #000; }
   .profile-user { width: 100%; height: 50px; gap: 12px; margin: 0; font-size: 14px; }
-  .profile-avatar { width: 50px; height: 50px; flex: none; border: 1px solid #484150; background: #29272c; color: #f6f2f6; font-size: 16px; font-weight: 500; }
+  .profile-avatar { width: 50px; height: 50px; flex: none; border: 1px solid #484150; background: #000; color: #f6f2f6; font-size: 16px; font-weight: 500; }
   .profile-user small { font-size: 12px; }
   .profile-user button { height: 34px; gap: 6px; padding: 0 12px; border: 0; border-radius: 6px; background: #af0059; color: #fff; font-size: 14px; }
   .profile-user button:hover { background: #c80068; }
-  .profile-login-banner { width: 100%; min-height: 96px; display: grid; align-content: center; gap: 5px; margin: 0; padding: 15px 16px; border-color: rgba(191,173,210,.2); border-radius: 17px; background: linear-gradient(115deg, #29252e, #3a2440); }
+  .profile-login-banner { width: 100%; min-height: 96px; display: grid; align-content: center; gap: 5px; margin: 0; padding: 15px 16px; border-color: rgba(191,173,210,.2); border-radius: 17px; background: #000; }
   .profile-login-banner strong { font-size: 17px; line-height: 1.2; }
   .profile-login-banner span { color: #c4bac9; text-align: left; font-size: 12px; line-height: 1.4; }
   .profile-view-main .profile-heading { display: none; }

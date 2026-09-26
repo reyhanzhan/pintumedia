@@ -61,7 +61,7 @@ export default function Home() {
   const [affiliateSummary, setAffiliateSummary] = useState<AffiliateSummary | null>(null);
   const t = (id: string, en: string) => language === "id" ? id : en;
   const donationUrl = process.env.NEXT_PUBLIC_DONATION_URL;
-  const [platform, setPlatform] = useState("DramaVerse");
+  const [platform, setPlatform] = useState("PintuMedia");
   const [platformOpen, setPlatformOpen] = useState(false);
   const [platformQuery, setPlatformQuery] = useState("");
   const [recentPlatforms, setRecentPlatforms] = useState<string[]>([]);
@@ -441,7 +441,7 @@ export default function Home() {
   };
 
   const goLanding = () => {
-    setPlatform("DramaVerse");
+    setPlatform("PintuMedia");
     setPlatformOpen(false);
     setLanguageOpen(false);
     setSearchOpen(false);
@@ -587,7 +587,7 @@ export default function Home() {
             try { localStorage.setItem("pintumedia.watch-history", JSON.stringify(next)); } catch { /* History is optional. */ }
             return next;
           })} t={t} />}
-          {!!(recommendedDramas.length || catalog.length) && (
+          {platform === "PintuMedia" && !!(recommendedDramas.length || catalog.length) && (
             <RecommendationShelf
               dramas={recommendedDramas.length ? recommendedDramas : catalog.slice(0, 6)}
               curated={!!recommendedDramas.length}

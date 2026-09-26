@@ -289,15 +289,15 @@ button { color: inherit; }
 .profile-login-banner { min-height: 58px; }
 .profile-card-list { margin-bottom: 30px; }
 .profile-drama-list { width: min(100%, 800px); display: grid; gap: 12px; }
-.profile-empty { margin: 0; padding: 30px 22px; border: 1px solid rgba(191,173,210,.25); border-radius: 14px; background: #282330; color: #aaa2b3; text-align: center; }
+.profile-empty { margin: 0; padding: 30px 22px; border: 1px solid rgba(191,173,210,.25); border-radius: 14px; background: #000; color: #aaa2b3; text-align: center; }
 .profile-drama-row { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 14px 9px 9px; border: 1px solid rgba(191,173,210,.28); border-radius: 13px; background: #2b2531; }
 .profile-drama-open { min-width: 0; flex: 1; display: grid; grid-template-columns: 58px minmax(0,1fr) 22px; align-items: center; gap: 13px; border: 0; background: transparent; color: #eeeaf2; text-align: left; cursor: pointer; }
 .profile-drama-open > span { position: relative; width: 58px; height: 76px; overflow: hidden; border-radius: 8px; background: #17121c; }
 .profile-drama-open img { object-fit: cover; }
 .profile-drama-open strong { overflow: hidden; font-size: 15px; text-overflow: ellipsis; }
 .profile-remove-favorite { display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(230,0,115,.13); color: #f14e9d; cursor: pointer; }
-.profile-info-panel { width: min(100%, 720px); display: grid; justify-items: center; gap: 12px; margin: 0 auto 48px; padding: 36px 24px; border: 1px solid rgba(191,173,210,.36); border-radius: 18px; background: #2b2531; text-align: center; }
-.profile-info-icon { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%; background: #51485d; color: #dcd3e6; }
+.profile-info-panel { width: min(100%, 720px); display: grid; justify-items: center; gap: 12px; margin: 0 auto 48px; padding: 36px 24px; border: 1px solid rgba(191,173,210,.36); border-radius: 18px; background: #000; text-align: center; }
+.profile-info-icon { width: 76px; height: 76px; display: grid; place-items: center; border-radius: 50%; background: #000; color: #dcd3e6; }
 .profile-info-panel h2 { margin: 7px 0 0; font-size: 23px; }
 .profile-info-panel p { max-width: 540px; margin: 0; color: #bcb4c5; line-height: 1.7; }
 .profile-help-actions { justify-content: center; padding: 8px 0 0; }
@@ -308,7 +308,7 @@ button { color: inherit; }
 .affiliate-hero h2 { max-width: 650px; margin: 0; font-size: clamp(21px, 3vw, 29px); line-height: 1.45; }
 .affiliate-page h3 { width: 100%; margin: 5px 0 0; padding: 16px 0 19px; border-bottom: 1px solid rgba(191,173,210,.35); font-size: 24px; text-align: center; }
 .affiliate-steps { width: 100%; display: grid; gap: 16px; }
-.affiliate-steps article { position: relative; min-height: 172px; display: grid; align-content: center; justify-items: center; gap: 8px; padding: 20px 24px; border: 1px solid rgba(191,173,210,.52); border-radius: 18px; background: #2b2531; text-align: center; }
+.affiliate-steps article { position: relative; min-height: 172px; display: grid; align-content: center; justify-items: center; gap: 8px; padding: 20px 24px; border: 1px solid rgba(191,173,210,.52); border-radius: 18px; background: #000; text-align: center; }
 .affiliate-step-icon { width: 82px; height: 82px; display: grid; place-items: center; border-radius: 50%; background: #f2edf6; color: #aa0876; }
 .affiliate-steps article strong { margin-top: 4px; font-size: 19px; }
 .affiliate-steps article small { color: #c5bdcd; font-size: 15px; }

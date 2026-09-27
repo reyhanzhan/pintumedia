@@ -63,15 +63,25 @@ async function createXenditCheckout(input: CheckoutInput, settings: AppSettings)
  *
  * Auth is `client-id`/`client-secret` request headers (LinkQu issues these from
  * the merchant "Credential" dashboard page) plus the signature formula below,
- * which follows LinkQu's public "Panduan Signatur untuk API LinkQu" page for VA
- * creation. LinkQu does not publish the exact response field names — those come
- * from the private merchant Postman collection/PDF they hand out after
- * registration. Confirm the `data.*` field names below (set via the admin panel)
- * against that document before relying on this in production.
+ * copied verbatim from LinkQu's public "Panduan Signatur untuk API LinkQu" page:
+ *
+ *   $secondvalue = strtolower(preg_replace($regex, "", $amount.$expired.$bank_code
+ *     .$partner_reff.$customer_id.$customer_name.$customer_email.$clientID));
+ *   $firstvalue = $path.$method;   // NOT normalized — kept as-is, slashes and all
+ *   $buildkey = $firstvalue.$secondvalue;
+ *   $signature = hash_hmac('sha256', $buildkey, $serverKey);
+ *
+ * `$path` there is the short form without the "linkqu-partner" prefix (e.g.
+ * "/transaction/create/va"), even though the real request URL needs that prefix.
+ * LinkQu does not publish the exact response field names — those come from the
+ * private merchant Postman collection/PDF they hand out after registration.
+ * Confirm the `data.*` field names below (set via the admin panel) against that
+ * document before relying on this in production.
  */
-function linkquSignature(parts: (string | number)[], serverKey: string) {
-  const normalized = parts.join(".").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return createHmac("sha256", serverKey).update(normalized).digest("hex");
+function linkquSignature(path: string, method: string, rest: (string | number)[], serverKey: string) {
+  const secondValue = rest.join("").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const buildKey = `${path}${method}${secondValue}`;
+  return createHmac("sha256", serverKey).update(buildKey).digest("hex");
 }
 
 async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
@@ -89,14 +99,11 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const expired = expiresAt.toISOString().replace(/[-:T]/g, "").slice(0, 14);
   const customerName = (input.email.split("@")[0] || "PintuMedia").slice(0, 20);
-  // LinkQu's signature guide uses the path without the "linkqu-partner" prefix
-  // (e.g. "/transaction/create/vapermata"), even though the real request URL needs
-  // that prefix. Strip it here so the signature matches what they expect. The HMAC
-  // key is the dashboard's distinct "Signature Key", not the client-secret used
-  // for the client-secret header.
   const signaturePath = path.replace(/^\/?linkqu-partner/, "");
   const signature = linkquSignature(
-    [signaturePath, "POST", input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
+    signaturePath,
+    "POST",
+    [input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
     signatureKey,
   );
   const response = await fetch(`${baseUrl}${path}`, {

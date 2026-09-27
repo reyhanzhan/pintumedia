@@ -596,7 +596,7 @@ export default function Home() {
               t={t}
             />
           )}
-          {!!catalog.length && <div id="semua-drama"><DramaShelf title={t("Semua Drama", "All dramas")} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog} onSelect={openDrama} showAll /></div>}
+          {!!catalog.length && <div id="semua-drama"><DramaShelf title={platform === "PintuMedia" ? t("Semua Drama", "All dramas") : t(`Drama ${platform}`, `${platform} dramas`)} moreLabel={t("Selengkapnya", "View all")} lessLabel={t("Lebih sedikit", "Show less")} dramas={catalog} onSelect={openDrama} showAll /></div>}
           {!!catalog.length && <div ref={catalogSentinelRef} className="catalog-sentinel" aria-live="polite">{catalogLoadingMore ? <><span className="video-spinner" /> {t("Memuat film berikutnya...", "Loading more titles...")}</> : !catalogResult.hasMore ? t("Semua film dari API sudah ditampilkan.", "All titles from the API are displayed.") : null}</div>}
         </div>
       )}

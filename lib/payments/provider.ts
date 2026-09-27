@@ -91,9 +91,8 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const username = resolveSecret(settings, "LINKQU_USERNAME");
   const pin = resolveSecret(settings, "LINKQU_PIN");
   const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
-  const signatureKey = resolveSecret(settings, "LINKQU_SIGNATURE_KEY");
   const bankCode = resolveSecret(settings, "LINKQU_VA_BANK_CODE");
-  if (!baseUrl || !clientId || !username || !pin || !serverKey || !signatureKey || !bankCode || !path) {
+  if (!baseUrl || !clientId || !username || !pin || !serverKey || !bankCode || !path) {
     throw new Error("Konfigurasi LinkQu belum lengkap (isi di panel admin /admin).");
   }
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -104,7 +103,7 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
     signaturePath,
     "POST",
     [input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
-    signatureKey,
+    serverKey,
   );
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",

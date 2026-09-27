@@ -88,8 +88,12 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const expired = expiresAt.toISOString().replace(/[-:T]/g, "").slice(0, 14);
   const customerName = (input.email.split("@")[0] || "PintuMedia").slice(0, 20);
+  // LinkQu's signature guide uses the path without the "linkqu-partner" prefix
+  // (e.g. "/transaction/create/vapermata"), even though the real request URL needs
+  // that prefix. Strip it here so the signature matches what they expect.
+  const signaturePath = path.replace(/^\/?linkqu-partner/, "");
   const signature = linkquSignature(
-    [path, "POST", input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
+    [signaturePath, "POST", input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
     serverKey,
   );
   const response = await fetch(`${baseUrl}${path}`, {

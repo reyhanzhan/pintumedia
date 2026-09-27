@@ -47,7 +47,7 @@ type ProfileView = "main" | "history" | "favorites" | "download" | "affiliate" |
 type AffiliateProfile = { display_name: string | null; referral_code: string };
 type AffiliateSummary = { available: number; thisMonth: number; referrals: number };
 
-const PINTUMEDIA_WHATSAPP_CS = "6282131314696";
+const PINTUMEDIA_WHATSAPP_CS = "6287878620162";
 
 export default function Home() {
   const [language, setLanguage] = useState<"id" | "en">("id");

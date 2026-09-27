@@ -61,11 +61,12 @@ async function createXenditCheckout(input: CheckoutInput, settings: AppSettings)
  * LinkQu virtual-account (VA) checkout: the customer transfers to a bank-specific
  * VA number and LinkQu notifies our webhook automatically — no QR involved.
  *
- * The signature formula and field order below follow LinkQu's public "Panduan
- * Signatur untuk API LinkQu" page for VA creation, but LinkQu does not publish
- * the exact endpoint path or response field names — those come from the private
- * merchant Postman collection/PDF they hand out after registration. Confirm
- * LINKQU_VA_PATH and the `data.*` field names below (set via the admin panel)
+ * Auth is `client-id`/`client-secret` request headers (LinkQu issues these from
+ * the merchant "Credential" dashboard page) plus the signature formula below,
+ * which follows LinkQu's public "Panduan Signatur untuk API LinkQu" page for VA
+ * creation. LinkQu does not publish the exact response field names — those come
+ * from the private merchant Postman collection/PDF they hand out after
+ * registration. Confirm the `data.*` field names below (set via the admin panel)
  * against that document before relying on this in production.
  */
 function linkquSignature(parts: (string | number)[], serverKey: string) {
@@ -93,7 +94,12 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   );
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "client-id": clientId,
+      "client-secret": serverKey,
+    },
     body: JSON.stringify({
       amount: input.amount,
       partner_reff: input.orderId,

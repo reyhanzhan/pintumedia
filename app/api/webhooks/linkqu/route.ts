@@ -15,13 +15,13 @@ import { getSettings, resolveSecret } from "@/lib/settings";
  */
 async function verifyLinkQuSignature(payload: Record<string, unknown>, signature: string | null) {
   const settings = await getSettings();
-  const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
-  if (!serverKey || !signature) return false;
+  const signatureKey = resolveSecret(settings, "LINKQU_SIGNATURE_KEY");
+  if (!signatureKey || !signature) return false;
   const normalized = [payload.partner_reff, payload.amount, payload.status]
     .join(".")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
-  const expected = createHmac("sha256", serverKey).update(normalized).digest("hex");
+  const expected = createHmac("sha256", signatureKey).update(normalized).digest("hex");
   const expectedBuf = Buffer.from(expected, "utf8");
   const suppliedBuf = Buffer.from(signature, "utf8");
   return expectedBuf.length === suppliedBuf.length && timingSafeEqual(expectedBuf, suppliedBuf);

@@ -81,8 +81,9 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const username = resolveSecret(settings, "LINKQU_USERNAME");
   const pin = resolveSecret(settings, "LINKQU_PIN");
   const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
+  const signatureKey = resolveSecret(settings, "LINKQU_SIGNATURE_KEY");
   const bankCode = resolveSecret(settings, "LINKQU_VA_BANK_CODE");
-  if (!baseUrl || !clientId || !username || !pin || !serverKey || !bankCode || !path) {
+  if (!baseUrl || !clientId || !username || !pin || !serverKey || !signatureKey || !bankCode || !path) {
     throw new Error("Konfigurasi LinkQu belum lengkap (isi di panel admin /admin).");
   }
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -90,11 +91,13 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const customerName = (input.email.split("@")[0] || "PintuMedia").slice(0, 20);
   // LinkQu's signature guide uses the path without the "linkqu-partner" prefix
   // (e.g. "/transaction/create/vapermata"), even though the real request URL needs
-  // that prefix. Strip it here so the signature matches what they expect.
+  // that prefix. Strip it here so the signature matches what they expect. The HMAC
+  // key is the dashboard's distinct "Signature Key", not the client-secret used
+  // for the client-secret header.
   const signaturePath = path.replace(/^\/?linkqu-partner/, "");
   const signature = linkquSignature(
     [signaturePath, "POST", input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId],
-    serverKey,
+    signatureKey,
   );
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",

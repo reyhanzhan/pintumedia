@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { SECRET_FIELD_GROUPS, type SecretField } from "@/lib/secret-fields";
-import { DEFAULT_PLANS, type Plan } from "@/lib/plans";
+import { DEFAULT_PLANS, formatIDR, type Plan } from "@/lib/plans";
 import type { Drama } from "@/lib/catalog";
 import { platforms } from "@/lib/platforms";
 
@@ -96,6 +96,40 @@ export default function AdminPage() {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+  };
+
+  const [manualEmail, setManualEmail] = useState("");
+  const [manualPlanId, setManualPlanId] = useState("");
+  const [manualDramaId, setManualDramaId] = useState("");
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [manualSuccess, setManualSuccess] = useState("");
+  const manualPlan = plans.find((item) => item.id === manualPlanId);
+
+  const submitManualActivation = async () => {
+    setManualError("");
+    setManualSuccess("");
+    const email = manualEmail.trim().toLowerCase();
+    if (!email) { setManualError("Email wajib diisi."); return; }
+    if (!manualPlan) { setManualError("Pilih paket dulu."); return; }
+    if (manualPlan.scope === "drama" && !manualDramaId.trim()) { setManualError("ID drama wajib diisi untuk paket ini."); return; }
+    setManualSaving(true);
+    try {
+      const response = await fetch("/api/admin/manual-activation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, planId: manualPlan.id, dramaId: manualPlan.scope === "drama" ? manualDramaId.trim() : undefined }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Gagal mengaktifkan akses.");
+      setManualSuccess(`Akses untuk ${email} berhasil diaktifkan.`);
+      setManualEmail("");
+      setManualDramaId("");
+    } catch (err) {
+      setManualError(err instanceof Error ? err.message : "Gagal mengaktifkan akses.");
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   const updatePlan = (index: number, patch: Partial<Plan>) => {
@@ -274,6 +308,33 @@ export default function AdminPage() {
             </span>
           </div>
         ))}
+      </section>
+
+      <section style={styles.card}>
+        <h2 style={styles.h2}>Aktivasi Manual (WhatsApp)</h2>
+        <p style={{ margin: 0, color: "#8e9bb0", fontSize: 13 }}>Untuk pelanggan yang bayar manual via WhatsApp (dipakai selagi pembayaran otomatis belum aktif). Ini langsung membuka akses tanpa payment gateway.</p>
+        <label style={styles.field}>
+          <span>Email pelanggan</span>
+          <input value={manualEmail} onChange={(event) => setManualEmail(event.target.value)} placeholder="email@contoh.com" style={styles.input} />
+        </label>
+        <label style={styles.field}>
+          <span>Paket</span>
+          <select value={manualPlanId} onChange={(event) => setManualPlanId(event.target.value)} style={styles.input}>
+            <option value="">Pilih paket</option>
+            {plans.map((item) => <option key={item.id} value={item.id}>{item.label} — {formatIDR(item.amount)}</option>)}
+          </select>
+        </label>
+        {manualPlan?.scope === "drama" && (
+          <label style={styles.field}>
+            <span>ID Drama (mis. nuno:dramabite:12345)</span>
+            <input value={manualDramaId} onChange={(event) => setManualDramaId(event.target.value)} placeholder="ID drama" style={styles.input} />
+          </label>
+        )}
+        {manualError && <p style={{ color: "#ff8a8a", margin: 0, fontSize: 13 }}>{manualError}</p>}
+        {manualSuccess && <p style={{ color: "#7be08a", margin: 0, fontSize: 13 }}>{manualSuccess}</p>}
+        <button type="button" onClick={() => void submitManualActivation()} disabled={manualSaving} style={styles.addButton}>
+          {manualSaving ? "Mengaktifkan..." : "Aktifkan Akses"}
+        </button>
       </section>
 
       <section style={styles.card}>

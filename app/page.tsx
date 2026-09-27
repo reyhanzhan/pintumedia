@@ -32,6 +32,7 @@ import {
   Smartphone,
   Share2,
   LifeBuoy,
+  MessageCircle,
   ArrowRight,
   Heart,
   UserRoundPlus,
@@ -45,6 +46,8 @@ import {
 type ProfileView = "main" | "history" | "favorites" | "download" | "affiliate" | "help";
 type AffiliateProfile = { display_name: string | null; referral_code: string };
 type AffiliateSummary = { available: number; thisMonth: number; referrals: number };
+
+const PINTUMEDIA_WHATSAPP_CS = "6282131314696";
 
 export default function Home() {
   const [language, setLanguage] = useState<"id" | "en">("id");
@@ -79,6 +82,7 @@ export default function Home() {
   const unlocked = globalUnlocked || (!!selectedDrama && unlockedDramaIds.has(String(selectedDrama.id)));
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [recommendedDramas, setRecommendedDramas] = useState<Drama[]>([]);
+  const [paymentProvider, setPaymentProvider] = useState("");
   const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
   const [plan, setPlan] = useState<string>(DEFAULT_PLANS[0]?.id ?? "");
   const selectedPlan = plans.find((item) => item.id === plan) ?? plans[0];
@@ -293,13 +297,14 @@ export default function Home() {
   // Plans (labels, prices, order) can be changed anytime from the admin panel; always show the live list.
   useEffect(() => {
     fetch("/api/settings/public")
-      .then((response) => response.json() as Promise<{ plans: Plan[]; recommendedDramas?: Drama[] }>)
+      .then((response) => response.json() as Promise<{ plans: Plan[]; recommendedDramas?: Drama[]; paymentProvider?: string }>)
       .then((data) => {
         if (data.plans?.length) {
           setPlans(data.plans);
           setPlan((current) => (data.plans.some((item) => item.id === current) ? current : data.plans[0].id));
         }
         if (data.recommendedDramas?.length) setRecommendedDramas(data.recommendedDramas);
+        setPaymentProvider(data.paymentProvider ?? "");
       })
       .catch(() => undefined);
   }, []);
@@ -360,6 +365,23 @@ export default function Home() {
     } finally {
       setCheckoutLoading(false);
     }
+  };
+
+  const startManualOrder = () => {
+    const email = checkoutEmail.trim();
+    if (!email) { setCheckoutError(t("Email wajib diisi.", "Email is required.")); return; }
+    if (!selectedPlan) { setCheckoutError(t("Pilih paket dulu.", "Pick a plan first.")); return; }
+    const needsDrama = selectedPlan.scope === "drama";
+    if (needsDrama && !selectedDrama) { setCheckoutError(t("Pilih drama dulu.", "Pick a drama first.")); return; }
+    setCheckoutError("");
+    window.localStorage.setItem("pintumedia_email", email);
+    const lines = [
+      t("Halo PintuMedia, saya mau pesan akses:", "Hi PintuMedia, I'd like to order access:"),
+      `${t("Paket", "Plan")}: ${selectedPlan.label} (${formatIDR(selectedPlan.amount)})`,
+      needsDrama && selectedDrama ? `${t("Drama", "Drama")}: ${selectedDrama.title}` : null,
+      `Email: ${email}`,
+    ].filter(Boolean).join("\n");
+    window.open(`https://wa.me/${PINTUMEDIA_WHATSAPP_CS}?text=${encodeURIComponent(lines)}`, "_blank", "noopener,noreferrer");
   };
 
   // Poll for the LinkQu/Midtrans/Xendit webhook to flip the order to "paid", then
@@ -728,9 +750,18 @@ export default function Home() {
                   <input id="checkout-email" type="email" inputMode="email" value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} placeholder="nama@email.com" />
                 </div>
                 {checkoutError && <p className="checkout-error" role="alert">{checkoutError}</p>}
-                <button className="watch-now wide" disabled={checkoutLoading} onClick={handleCheckout}>
-                  {checkoutLoading ? <Loader2 size={18} className="spin" /> : t("Lanjut bayar", "Continue to pay")}
-                </button>
+                {paymentProvider ? (
+                  <button className="watch-now wide" disabled={checkoutLoading} onClick={handleCheckout}>
+                    {checkoutLoading ? <Loader2 size={18} className="spin" /> : t("Lanjut bayar", "Continue to pay")}
+                  </button>
+                ) : (
+                  <>
+                    <button className="watch-now wide" onClick={startManualOrder}>
+                      <MessageCircle size={18} /> {t("Pesan via WhatsApp", "Order via WhatsApp")}
+                    </button>
+                    <p className="payment-message">{t("Pembayaran otomatis belum aktif. Admin akan mengaktifkan akses setelah pembayaran dikonfirmasi via WhatsApp.", "Automatic payment isn't active yet. Admin will activate access after payment is confirmed over WhatsApp.")}</p>
+                  </>
+                )}
               </>
             ) : checkoutInfo && (() => {
               const checkout = checkoutInfo.checkout;
@@ -798,8 +829,8 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
   onSignOut: () => void;
 }) {
   const helpMessage = encodeURIComponent("Halo PintuMedia, saya butuh bantuan.");
-  const whatsappUrl = `https://wa.me/?text=${helpMessage}`;
-  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent("https://mediumpurple-lyrebird-983556.hostingersite.com")}&text=${helpMessage}`;
+  const whatsappUrl = `https://wa.me/${PINTUMEDIA_WHATSAPP_CS}?text=${helpMessage}`;
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent("https://pintumedia.id")}&text=${helpMessage}`;
   const titleByView: Record<ProfileView, string> = {
     main: t("Profil", "Profile"), history: t("Riwayat Tontonan", "Watch History"), favorites: t("Daftar Favorit", "Favorites"),
     download: t("Download App", "Download App"), affiliate: t("Program Affiliate", "Affiliate Program"), help: t("Bantuan", "Help"),

@@ -114,10 +114,17 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
       signature,
     }),
   });
-  if (!response.ok) throw new Error(`LinkQu menolak pembuatan VA (${response.status}).`);
-  const data = (await response.json()) as { va_number?: string; virtual_account?: string; account_number?: string };
-  const vaNumber = data.va_number ?? data.virtual_account ?? data.account_number;
-  if (!vaNumber) throw new Error("LinkQu tidak mengembalikan nomor VA (periksa format respons di dokumentasi merchant).");
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`LinkQu menolak pembuatan VA (${response.status}): ${raw.slice(0, 500)}`);
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(`LinkQu mengembalikan respons non-JSON: ${raw.slice(0, 500)}`);
+  }
+  const nested = (data.data as Record<string, unknown> | undefined) ?? data;
+  const vaNumber = (nested.va_number ?? nested.virtual_account ?? nested.account_number ?? nested.vaNumber ?? nested.no_va) as string | undefined;
+  if (!vaNumber) throw new Error(`LinkQu tidak mengembalikan nomor VA. Respons: ${raw.slice(0, 800)}`);
   return { provider: "linkqu", method: "virtual_account", reference: input.orderId, bankCode, vaNumber, expiresAt: expiresAt.toISOString() };
 }
 

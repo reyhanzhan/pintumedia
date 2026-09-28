@@ -1,12 +1,14 @@
 import "server-only";
 import { createHmac } from "node:crypto";
+import QRCode from "qrcode";
 import { resolveSecret, type AppSettings } from "@/lib/settings";
 
 type CheckoutInput = { orderId: string; planId: string; planLabel: string; email: string; origin: string; amount: number };
 
 export type CheckoutResult =
   | { provider: "midtrans" | "xendit"; method: "redirect"; reference: string; checkoutUrl: string }
-  | { provider: "linkqu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string };
+  | { provider: "linkqu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
+  | { provider: "linkqu"; method: "qris"; reference: string; qrImageDataUrl: string; expiresAt: string };
 
 const basicAuth = (secret: string) => `Basic ${btoa(`${secret}:`)}`;
 
@@ -139,9 +141,81 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   return { provider: "linkqu", method: "virtual_account", reference: input.orderId, bankCode, vaNumber, expiresAt: expiresAt.toISOString() };
 }
 
+/**
+ * LinkQu QRIS checkout: the customer scans a dynamic QR code with any QRIS-
+ * compatible e-wallet/bank app; LinkQu notifies our webhook the same way as VA.
+ *
+ * LinkQu's public signature guide does NOT document a formula for QRIS (the
+ * "Create QRIS" row in their Formula Signature table is empty — checked against
+ * the raw page source on 2026-09-28). This formula is inferred by dropping the
+ * channel-code field (`$bank_code`/`$retail_code`) from the documented VA/retail
+ * formulas, since QRIS has no bank/retail channel to select:
+ *
+ *   $buildkey = $path.$method.strtolower(strip_non_alnum(
+ *     $amount.$expired.$partner_reff.$customer_id.$customer_name.$customer_email.$clientID));
+ *
+ * UNCONFIRMED — if this rejects with "Signature Not Valid!", the response body
+ * (thrown in the error) still reveals LinkQu's real response field names even on
+ * failure, same as happened with VA. Ask LinkQu support for the QRIS formula if
+ * guessing doesn't land within a couple of tries.
+ */
+async function createLinkQuQrisCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
+  const baseUrl = resolveSecret(settings, "LINKQU_BASE_URL");
+  const path = resolveSecret(settings, "LINKQU_QRIS_PATH");
+  const clientId = resolveSecret(settings, "LINKQU_CLIENT_ID");
+  const username = resolveSecret(settings, "LINKQU_USERNAME");
+  const pin = resolveSecret(settings, "LINKQU_PIN");
+  const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
+  const signatureKey = resolveSecret(settings, "LINKQU_SIGNATURE_KEY");
+  if (!baseUrl || !clientId || !username || !pin || !serverKey || !signatureKey || !path) {
+    throw new Error("Konfigurasi LinkQu QRIS belum lengkap (isi di panel admin /admin).");
+  }
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const expired = expiresAt.toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const customerName = (input.email.split("@")[0] || "PintuMedia").slice(0, 20);
+  const signaturePath = path.replace(/^\/?linkqu-partner/, "");
+  const sigParts: (string | number)[] = [input.amount, expired, input.orderId, input.orderId, customerName, input.email, clientId];
+  const signature = linkquSignature(signaturePath, "POST", sigParts, signatureKey);
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "client-id": clientId,
+      "client-secret": serverKey,
+    },
+    body: JSON.stringify({
+      amount: input.amount,
+      partner_reff: input.orderId,
+      customer_id: input.orderId,
+      customer_name: customerName,
+      expired,
+      username,
+      pin,
+      customer_phone: "",
+      customer_email: input.email,
+      signature,
+    }),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`LinkQu menolak pembuatan QRIS (${response.status}): ${raw.slice(0, 800)}`);
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(`LinkQu mengembalikan respons non-JSON: ${raw.slice(0, 500)}`);
+  }
+  const nested = (data.data as Record<string, unknown> | undefined) ?? data;
+  const qrString = (nested.qr_string ?? nested.qris_content ?? nested.qr_content ?? nested.qrString ?? nested.qr ?? nested.content) as string | undefined;
+  if (!qrString) throw new Error(`LinkQu tidak mengembalikan konten QRIS. Respons: ${raw.slice(0, 800)}`);
+  const qrImageDataUrl = await QRCode.toDataURL(qrString, { margin: 1, width: 320 });
+  return { provider: "linkqu", method: "qris", reference: input.orderId, qrImageDataUrl, expiresAt: expiresAt.toISOString() };
+}
+
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {
   if (settings.paymentProvider === "midtrans") return createMidtransCheckout(input, settings);
   if (settings.paymentProvider === "xendit") return createXenditCheckout(input, settings);
   if (settings.paymentProvider === "linkqu") return createLinkQuCheckout(input, settings);
-  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, atau linkqu).");
+  if (settings.paymentProvider === "linkqu_qris") return createLinkQuQrisCheckout(input, settings);
+  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu VA, atau LinkQu QRIS).");
 }

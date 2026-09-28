@@ -7,7 +7,7 @@ import { DEFAULT_PLANS, formatIDR, type Plan } from "@/lib/plans";
 import type { Drama } from "@/lib/catalog";
 import { platforms } from "@/lib/platforms";
 
-type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu";
+type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu" | "linkqu_qris";
 type Secrets = Partial<Record<SecretField, string>>;
 
 function newBlankPlan(): Plan {
@@ -364,7 +364,8 @@ export default function AdminPage() {
         <h2 style={styles.h2}>Metode Pembayaran Aktif</h2>
         <select value={paymentProvider} onChange={(event) => setPaymentProvider(event.target.value as PaymentProvider)} style={styles.input}>
           <option value="">Belum dipilih</option>
-          <option value="linkqu">LinkQu</option>
+          <option value="linkqu">LinkQu (Virtual Account)</option>
+          <option value="linkqu_qris">LinkQu (QRIS)</option>
           <option value="midtrans">Midtrans</option>
           <option value="xendit">Xendit</option>
         </select>

@@ -7,6 +7,7 @@ export const SECRET_FIELDS = [
   "LINKQU_SERVER_KEY",
   "LINKQU_SIGNATURE_KEY",
   "LINKQU_VA_BANK_CODE",
+  "LINKQU_QRIS_PATH",
   "MIDTRANS_SERVER_KEY",
   "XENDIT_SECRET_KEY",
   "XENDIT_WEBHOOK_TOKEN",
@@ -31,6 +32,7 @@ export const SECRET_FIELD_GROUPS: {
       { key: "LINKQU_SERVER_KEY", label: "Client Secret (header client-secret)", type: "password" },
       { key: "LINKQU_SIGNATURE_KEY", label: "Signature Key (untuk hitung signature)", type: "password" },
       { key: "LINKQU_VA_BANK_CODE", label: "Kode Bank VA" },
+      { key: "LINKQU_QRIS_PATH", label: "Endpoint path pembuatan QRIS" },
     ],
   },
   {

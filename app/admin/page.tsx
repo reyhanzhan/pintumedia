@@ -40,6 +40,8 @@ export default function AdminPage() {
   const [recError, setRecError] = useState("");
   const [users, setUsers] = useState<{ id: string; email: string; name: string; createdAt: string }[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState("");
+  const [usersError, setUsersError] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/users")
@@ -169,6 +171,22 @@ export default function AdminPage() {
 
   const removeFreeEmail = (email: string) => setFreeEmails((current) => current.filter((item) => item !== email));
 
+  const deleteUser = async (id: string, label: string) => {
+    if (!window.confirm(`Hapus akun "${label}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    setDeletingUserId(id);
+    setUsersError("");
+    try {
+      const response = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error || "Gagal menghapus pengguna.");
+      setUsers((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      setUsersError(err instanceof Error ? err.message : "Gagal menghapus pengguna.");
+    } finally {
+      setDeletingUserId("");
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     setError("");
@@ -207,6 +225,7 @@ export default function AdminPage() {
       <section style={styles.card}>
         <h2 style={styles.h2}>Pengguna Terdaftar ({users.length})</h2>
         {usersLoading && <p style={{ color: "#8e9bb0", fontSize: 13 }}>Memuat...</p>}
+        {usersError && <p style={{ color: "#ff8a8a", fontSize: 13 }}>{usersError}</p>}
         {!usersLoading && !users.length && <p style={{ color: "#8e9bb0", fontSize: 13 }}>Belum ada pengguna terdaftar.</p>}
         {!usersLoading && !!users.length && (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8, maxHeight: 320, overflowY: "auto" }}>
@@ -217,8 +236,18 @@ export default function AdminPage() {
                   <br />
                   <span style={{ fontSize: 12, color: "#8e9bb0" }}>{row.email}</span>
                 </span>
-                <span style={{ fontSize: 12, color: "#8e9bb0", whiteSpace: "nowrap" }}>
-                  {new Date(row.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 12, color: "#8e9bb0", whiteSpace: "nowrap" }}>
+                    {new Date(row.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void deleteUser(row.id, row.name || row.email)}
+                    disabled={deletingUserId === row.id}
+                    style={styles.removeButton}
+                  >
+                    {deletingUserId === row.id ? "..." : "Hapus"}
+                  </button>
                 </span>
               </li>
             ))}

@@ -1,6 +1,5 @@
 import "server-only";
 import { createHmac } from "node:crypto";
-import QRCode from "qrcode";
 import { resolveSecret, type AppSettings } from "@/lib/settings";
 
 type CheckoutInput = { orderId: string; planId: string; planLabel: string; email: string; origin: string; amount: number };
@@ -8,7 +7,7 @@ type CheckoutInput = { orderId: string; planId: string; planLabel: string; email
 export type CheckoutResult =
   | { provider: "midtrans" | "xendit"; method: "redirect"; reference: string; checkoutUrl: string }
   | { provider: "linkqu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
-  | { provider: "linkqu"; method: "qris"; reference: string; qrImageDataUrl: string; expiresAt: string };
+  | { provider: "linkqu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string };
 
 const basicAuth = (secret: string) => `Basic ${btoa(`${secret}:`)}`;
 
@@ -149,15 +148,11 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
  * "Create QRIS" row in their Formula Signature table is empty — checked against
  * the raw page source on 2026-09-28). This formula is inferred by dropping the
  * channel-code field (`$bank_code`/`$retail_code`) from the documented VA/retail
- * formulas, since QRIS has no bank/retail channel to select:
+ * formulas, since QRIS has no bank/retail channel to select — confirmed working
+ * against the live API on the first try (2026-09-28, response_code 00):
  *
  *   $buildkey = $path.$method.strtolower(strip_non_alnum(
  *     $amount.$expired.$partner_reff.$customer_id.$customer_name.$customer_email.$clientID));
- *
- * UNCONFIRMED — if this rejects with "Signature Not Valid!", the response body
- * (thrown in the error) still reveals LinkQu's real response field names even on
- * failure, same as happened with VA. Ask LinkQu support for the QRIS formula if
- * guessing doesn't land within a couple of tries.
  */
 async function createLinkQuQrisCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
   const baseUrl = resolveSecret(settings, "LINKQU_BASE_URL");
@@ -211,10 +206,11 @@ async function createLinkQuQrisCheckout(input: CheckoutInput, settings: AppSetti
     throw new Error(`LinkQu mengembalikan respons non-JSON: ${raw.slice(0, 500)}`);
   }
   const nested = (data.data as Record<string, unknown> | undefined) ?? data;
-  const qrString = (nested.qr_string ?? nested.qris_content ?? nested.qr_content ?? nested.qrString ?? nested.qr ?? nested.content) as string | undefined;
-  if (!qrString) throw new Error(`LinkQu tidak mengembalikan konten QRIS. Respons: ${raw.slice(0, 800)}`);
-  const qrImageDataUrl = await QRCode.toDataURL(qrString, { margin: 1, width: 320 });
-  return { provider: "linkqu", method: "qris", reference: input.orderId, qrImageDataUrl, expiresAt: expiresAt.toISOString() };
+  // Confirmed against the live API (2026-09-28): LinkQu hosts a ready-made QR
+  // image itself — no need to render qris_text into an image ourselves.
+  const qrImageUrl = (nested.imageqris ?? nested.qr_image ?? nested.qrImage) as string | undefined;
+  if (!qrImageUrl) throw new Error(`LinkQu tidak mengembalikan gambar QRIS. Respons: ${raw.slice(0, 800)}`);
+  return { provider: "linkqu", method: "qris", reference: input.orderId, qrImageUrl, expiresAt: expiresAt.toISOString() };
 }
 
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {

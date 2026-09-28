@@ -12,7 +12,12 @@ export async function GET(request: Request) {
 
   try {
     const playback = await fetchNunoPlayback(provider, sourceId, episode);
-    const url = provider === "bstation"
+    // A plain http:// video src on our https:// site hits the browser's mixed-content
+    // block (silently — the player just never plays); route those through our own
+    // https proxy instead. Skip proxying .m3u8 manifests: hls.js fetches segments
+    // directly and the proxy only forwards a single file, not manifest+segments.
+    const needsProxy = provider === "bstation" || (/^http:\/\//i.test(playback.url) && !/\.m3u8(?:\?|$)/i.test(playback.url));
+    const url = needsProxy
       ? `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`
       : playback.url;
     return NextResponse.json({ ...playback, url }, { headers: { "Cache-Control": "private, no-store" } });

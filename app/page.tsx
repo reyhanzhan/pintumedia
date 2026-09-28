@@ -41,6 +41,7 @@ import {
   ArrowUpDown,
   Sparkles,
   X,
+  CreditCard,
 } from "lucide-react";
 
 type ProfileView = "main" | "history" | "favorites" | "download" | "affiliate" | "help";
@@ -608,7 +609,7 @@ export default function Home() {
     <main className={profileOpen ? "profile-main" : "film-main"}>
       {header}
 
-      {profileOpen && !selectedDrama && <ProfilePage t={t} view={profileView} onView={setProfileView} history={watchHistory} favorites={favoriteDramas} onSelectDrama={selectProfileDrama} onToggleFavorite={toggleFavorite} onBack={backFromProfile} onAffiliateStart={() => setAuthOpen(true)} notice={profileNotice} user={user} affiliateProfile={affiliateProfile} affiliateSummary={affiliateSummary} onSignOut={signOut} />}
+      {profileOpen && !selectedDrama && <ProfilePage t={t} view={profileView} onView={setProfileView} history={watchHistory} favorites={favoriteDramas} onSelectDrama={selectProfileDrama} onToggleFavorite={toggleFavorite} onBack={backFromProfile} onAffiliateStart={() => setAuthOpen(true)} onSubscribe={openPaywall} notice={profileNotice} user={user} affiliateProfile={affiliateProfile} affiliateSummary={affiliateSummary} onSignOut={signOut} />}
 
       {!profileOpen && !selectedDrama && (
         <div className="catalog-page" aria-busy={catalogLoading}>
@@ -830,7 +831,7 @@ export default function Home() {
   );
 }
 
-function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onToggleFavorite, onBack, onAffiliateStart, notice, user, affiliateProfile, affiliateSummary, onSignOut }: {
+function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onToggleFavorite, onBack, onAffiliateStart, onSubscribe, notice, user, affiliateProfile, affiliateSummary, onSignOut }: {
   t: (id: string, en: string) => string;
   view: ProfileView;
   onView: (view: ProfileView) => void;
@@ -840,6 +841,7 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
   onToggleFavorite: (drama: Drama) => void;
   onBack: () => void;
   onAffiliateStart: () => void;
+  onSubscribe: () => void;
   notice: string;
   user: User | null;
   affiliateProfile: AffiliateProfile | null;
@@ -867,6 +869,7 @@ function ProfilePage({ t, view, onView, history, favorites, onSelectDrama, onTog
     {!user && <div className="profile-login-banner"><strong>{t("Mulai Nonton di PintuMedia", "Start Watching on PintuMedia")}</strong><span>{t("Masuk untuk mendapatkan link referral dan melacak komisi affiliate.", "Sign in to get your referral link and track affiliate commission.")}</span></div>}</div>{notice && <p className="affiliate-notice" role="status">{notice}</p>}</>}
     <div className="profile-heading"><button className="profile-back" onClick={onBack} aria-label={view === "main" ? t("Kembali ke film", "Back to films") : t("Kembali", "Back")}><ArrowLeft size={24} /></button><div><span className="profile-kicker">PINTUMEDIA</span><h1>{titleByView[view]}</h1></div></div>
     {view === "main" && <div className="profile-card-list">
+      <button className="profile-menu-card" onClick={onSubscribe}><span className="profile-menu-icon"><CreditCard size={25} /></span><strong>{t("Langganan", "Subscription")}</strong><ArrowRight size={22} /></button>
       {items.map(({ view: target, label, icon: Icon }) => <button className="profile-menu-card" key={target} onClick={() => onView(target)}><span className="profile-menu-icon"><Icon size={25} /></span><strong>{label}</strong><ArrowRight size={22} /></button>)}
     </div>}
     {(view === "history" || view === "favorites") && <div className="profile-drama-list">

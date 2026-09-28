@@ -38,6 +38,16 @@ export default function AdminPage() {
   const [recResults, setRecResults] = useState<Drama[]>([]);
   const [recSearching, setRecSearching] = useState(false);
   const [recError, setRecError] = useState("");
+  const [users, setUsers] = useState<{ id: string; email: string; name: string; createdAt: string }[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/users")
+      .then((response) => (response.ok ? (response.json() as Promise<{ users: typeof users }>) : Promise.reject()))
+      .then((data) => setUsers(data.users))
+      .catch(() => undefined)
+      .finally(() => setUsersLoading(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/settings")
@@ -195,6 +205,28 @@ export default function AdminPage() {
       </div>
 
       <section style={styles.card}>
+        <h2 style={styles.h2}>Pengguna Terdaftar ({users.length})</h2>
+        {usersLoading && <p style={{ color: "#8e9bb0", fontSize: 13 }}>Memuat...</p>}
+        {!usersLoading && !users.length && <p style={{ color: "#8e9bb0", fontSize: 13 }}>Belum ada pengguna terdaftar.</p>}
+        {!usersLoading && !!users.length && (
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+            {users.map((row) => (
+              <li key={row.id} style={styles.emailRow}>
+                <span>
+                  <strong>{row.name || "(tanpa nama)"}</strong>
+                  <br />
+                  <span style={{ fontSize: 12, color: "#8e9bb0" }}>{row.email}</span>
+                </span>
+                <span style={{ fontSize: 12, color: "#8e9bb0", whiteSpace: "nowrap" }}>
+                  {new Date(row.createdAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={styles.card}>
         <h2 style={styles.h2}>Paket Harga</h2>
         {plans.map((plan, index) => (
           <div key={plan.id} style={styles.planCard}>
@@ -237,20 +269,26 @@ export default function AdminPage() {
             </label>
             <label style={styles.field}>
               <span>Masa aktif</span>
-              <select
-                value={plan.durationDays ?? "lifetime"}
-                onChange={(event) => updatePlan(index, { durationDays: event.target.value === "lifetime" ? null : Number(event.target.value) })}
-                style={styles.input}
-              >
-                <option value="lifetime">Selamanya</option>
-                <option value="1">1 hari</option>
-                <option value="3">3 hari</option>
-                <option value="7">7 hari</option>
-                <option value="30">30 hari</option>
-                <option value="90">90 hari</option>
-                <option value="180">6 bulan (180 hari)</option>
-                <option value="365">365 hari</option>
-              </select>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={3650}
+                  disabled={plan.durationDays === null}
+                  value={plan.durationDays ?? ""}
+                  placeholder="jumlah hari"
+                  onChange={(event) => updatePlan(index, { durationDays: Math.max(1, Number(event.target.value) || 1) })}
+                  style={{ ...styles.input, flex: 1 }}
+                />
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, whiteSpace: "nowrap" }}>
+                  <input
+                    type="checkbox"
+                    checked={plan.durationDays === null}
+                    onChange={(event) => updatePlan(index, { durationDays: event.target.checked ? null : 30 })}
+                  />
+                  Selamanya
+                </label>
+              </div>
             </label>
           </div>
         ))}

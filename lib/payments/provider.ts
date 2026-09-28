@@ -73,10 +73,9 @@ async function createXenditCheckout(input: CheckoutInput, settings: AppSettings)
  *
  * `$path` there is the short form without the "linkqu-partner" prefix (e.g.
  * "/transaction/create/va"), even though the real request URL needs that prefix.
- * LinkQu does not publish the exact response field names — those come from the
- * private merchant Postman collection/PDF they hand out after registration.
- * Confirm the `data.*` field names below (set via the admin panel) against that
- * document before relying on this in production.
+ * `$serverKey` is the dashboard's dedicated Signature Key (LINKQU_SIGNATURE_KEY),
+ * not the Client Secret sent in the client-secret header — confirmed against the
+ * live API (2026-09-28) after both were tried.
  */
 function linkquSignature(path: string, method: string, rest: (string | number)[], serverKey: string) {
   const secondValue = rest.join("").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -93,7 +92,7 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const serverKey = resolveSecret(settings, "LINKQU_SERVER_KEY");
   const signatureKey = resolveSecret(settings, "LINKQU_SIGNATURE_KEY");
   const bankCode = resolveSecret(settings, "LINKQU_VA_BANK_CODE");
-  if (!baseUrl || !clientId || !username || !pin || !serverKey || !bankCode || !path) {
+  if (!baseUrl || !clientId || !username || !pin || !serverKey || !signatureKey || !bankCode || !path) {
     throw new Error("Konfigurasi LinkQu belum lengkap (isi di panel admin /admin).");
   }
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -101,60 +100,43 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
   const customerName = (input.email.split("@")[0] || "PintuMedia").slice(0, 20);
   const signaturePath = path.replace(/^\/?linkqu-partner/, "");
   const sigParts: (string | number)[] = [input.amount, expired, bankCode, input.orderId, input.orderId, customerName, input.email, clientId];
-
-  // The exact secret LinkQu expects as the signature's HMAC key isn't confirmed
-  // (their docs literally call it "$serverKey" but don't say which dashboard field
-  // that maps to). Try every plausible candidate key in one round trip instead of
-  // one deploy per guess; keep whichever one LinkQu accepts.
-  const candidates: { label: string; key: string }[] = [{ label: "Client Secret", key: serverKey }];
-  if (signatureKey) candidates.push({ label: "Signature Key", key: signatureKey });
-
-  const attempts: string[] = [];
-  for (const candidate of candidates) {
-    const signature = linkquSignature(signaturePath, "POST", sigParts, candidate.key);
-    const response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "client-id": clientId,
-        "client-secret": serverKey,
-      },
-      body: JSON.stringify({
-        amount: input.amount,
-        partner_reff: input.orderId,
-        customer_id: input.orderId,
-        customer_name: customerName,
-        expired,
-        username,
-        pin,
-        customer_phone: "",
-        customer_email: input.email,
-        bank_code: bankCode,
-        signature,
-      }),
-    });
-    const raw = await response.text();
-    if (!response.ok) {
-      attempts.push(`[${candidate.label}] HTTP ${response.status}: ${raw.slice(0, 300)}`);
-      continue;
-    }
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      attempts.push(`[${candidate.label}] respons non-JSON: ${raw.slice(0, 300)}`);
-      continue;
-    }
-    const nested = (data.data as Record<string, unknown> | undefined) ?? data;
-    const vaNumber = (nested.va_number ?? nested.virtual_account ?? nested.account_number ?? nested.vaNumber ?? nested.no_va) as string | undefined;
-    if (!vaNumber) {
-      attempts.push(`[${candidate.label}] tidak ada nomor VA: ${raw.slice(0, 400)}`);
-      continue;
-    }
-    return { provider: "linkqu", method: "virtual_account", reference: input.orderId, bankCode, vaNumber, expiresAt: expiresAt.toISOString() };
+  // Confirmed against the live API: the HMAC key is the dashboard's dedicated
+  // Signature Key, not the Client Secret used in the client-secret header.
+  const signature = linkquSignature(signaturePath, "POST", sigParts, signatureKey);
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "client-id": clientId,
+      "client-secret": serverKey,
+    },
+    body: JSON.stringify({
+      amount: input.amount,
+      partner_reff: input.orderId,
+      customer_id: input.orderId,
+      customer_name: customerName,
+      expired,
+      username,
+      pin,
+      customer_phone: "",
+      customer_email: input.email,
+      bank_code: bankCode,
+      signature,
+    }),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`LinkQu menolak pembuatan VA (${response.status}): ${raw.slice(0, 500)}`);
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(`LinkQu mengembalikan respons non-JSON: ${raw.slice(0, 500)}`);
   }
-  throw new Error(`LinkQu menolak semua percobaan signature.\n${attempts.join("\n")}`);
+  const nested = (data.data as Record<string, unknown> | undefined) ?? data;
+  const vaNumber = (nested.va_number ?? nested.virtual_account ?? nested.account_number ?? nested.vaNumber ?? nested.no_va) as string | undefined;
+  if (!vaNumber) throw new Error(`LinkQu tidak mengembalikan nomor VA. Respons: ${raw.slice(0, 800)}`);
+  return { provider: "linkqu", method: "virtual_account", reference: input.orderId, bankCode, vaNumber, expiresAt: expiresAt.toISOString() };
 }
 
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {

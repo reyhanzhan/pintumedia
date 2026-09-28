@@ -13,14 +13,19 @@ export async function GET(request: Request) {
   try {
     const playback = await fetchNunoPlayback(provider, sourceId, episode);
     // A plain http:// video src on our https:// site hits the browser's mixed-content
-    // block (silently — the player just never plays); route those through our own
-    // https proxy instead. Skip proxying .m3u8 manifests: hls.js fetches segments
-    // directly and the proxy only forwards a single file, not manifest+segments.
-    const needsProxy = provider === "bstation" || (/^http:\/\//i.test(playback.url) && !/\.m3u8(?:\?|$)/i.test(playback.url));
-    const url = needsProxy
-      ? `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`
-      : playback.url;
-    return NextResponse.json({ ...playback, url }, { headers: { "Cache-Control": "private, no-store" } });
+    // block (silently for <video src>, outright for hls.js's manifest/segment
+    // fetches) — route those through our own https proxy instead. m3u8 manifests
+    // need the manifest-rewriting proxy (segments are separate requests); single
+    // files (mp4, or Bstation which needs a special Referer) use the plain one.
+    const isHls = /\.m3u8(?:\?|$)/i.test(playback.url);
+    const isHttp = /^http:\/\//i.test(playback.url);
+    let url = playback.url;
+    if (isHls && isHttp) {
+      url = `/api/nunodrama/hlsproxy?u=${encodeURIComponent(playback.url)}`;
+    } else if (provider === "bstation" || (isHttp && !isHls)) {
+      url = `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`;
+    }
+    return NextResponse.json({ ...playback, url, isHls }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Playback NunoDrama tidak tersedia.";
     return NextResponse.json({ error: message }, { status: 502 });

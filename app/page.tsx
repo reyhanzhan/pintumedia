@@ -97,6 +97,7 @@ export default function Home() {
   const [checkoutInfo, setCheckoutInfo] = useState<{ orderId: string; dramaId: string | null; checkout: CheckoutResult } | null>(null);
   const [toast, setToast] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState("");
+  const [playbackIsHls, setPlaybackIsHls] = useState(false);
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [playbackError, setPlaybackError] = useState("");
   const [catalogResult, setCatalogResult] = useState<{ platform: string; language: "id" | "en"; page: number; hasMore: boolean; dramas: Drama[]; error?: boolean; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>({ platform: "", language: "id", page: 0, hasMore: false, dramas: [] });
@@ -257,9 +258,9 @@ export default function Home() {
       const query = new URLSearchParams({ provider: sourceProvider, id: sourceId, episode: String(episode) });
       try {
         const response = await fetch(`/api/nunodrama/play?${query}`, { signal: controller.signal, headers: { Accept: "application/json" } });
-        const payload = await response.json() as { url?: string; error?: string };
+        const payload = await response.json() as { url?: string; isHls?: boolean; error?: string };
         if (!response.ok || !payload.url) throw new Error(payload.error || "Video tidak tersedia");
-        if (!controller.signal.aborted) setPlaybackUrl(payload.url);
+        if (!controller.signal.aborted) { setPlaybackUrl(payload.url); setPlaybackIsHls(!!payload.isHls); }
       } catch (error) {
         if (!controller.signal.aborted) setPlaybackError(error instanceof Error ? error.message : "Video tidak tersedia");
       } finally {
@@ -673,7 +674,7 @@ export default function Home() {
               </div>
             </div>
             <div className="video-shell">
-              {playbackUrl ? <HlsVideo src={playbackUrl} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
+              {playbackUrl ? <HlsVideo src={playbackUrl} isHls={playbackIsHls} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
                 <div className="video-poster"><Poster drama={selectedDrama} /></div>
                 <div className="video-overlay" />
                 <button className="video-play" disabled={playbackLoading} onClick={() => notify(playbackLoading ? t("Menyiapkan video...", "Preparing video...") : t("Video belum tersedia", "Video is not available"))}>{playbackLoading ? <span className="video-spinner" /> : <Play fill="currentColor" />}</button>
@@ -1054,7 +1055,7 @@ function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string
   );
 }
 
-function HlsVideo({ src, onError }: { src: string; onError: () => void }) {
+function HlsVideo({ src, isHls, onError }: { src: string; isHls: boolean; onError: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onErrorRef = useRef(onError);
 
@@ -1063,7 +1064,7 @@ function HlsVideo({ src, onError }: { src: string; onError: () => void }) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (/\.m3u8(?:\?|$)/i.test(src) && Hls.isSupported()) {
+    if (isHls && Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
       hls.loadSource(src);
       hls.attachMedia(video);
@@ -1074,7 +1075,7 @@ function HlsVideo({ src, onError }: { src: string; onError: () => void }) {
     video.src = src;
     void video.play().catch(() => undefined);
     return () => { video.removeAttribute("src"); video.load(); };
-  }, [src]);
+  }, [src, isHls]);
 
   return <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="metadata" onError={() => onErrorRef.current()} />;
 }

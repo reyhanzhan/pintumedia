@@ -243,9 +243,12 @@ export default function AdminPage() {
                 style={styles.input}
               >
                 <option value="lifetime">Selamanya</option>
+                <option value="1">1 hari</option>
+                <option value="3">3 hari</option>
                 <option value="7">7 hari</option>
                 <option value="30">30 hari</option>
                 <option value="90">90 hari</option>
+                <option value="180">6 bulan (180 hari)</option>
                 <option value="365">365 hari</option>
               </select>
             </label>

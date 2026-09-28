@@ -161,7 +161,12 @@ async function createLinkQuCheckout(input: CheckoutInput, settings: AppSettings)
  */
 async function createLinkQuQrisCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
   const baseUrl = resolveSecret(settings, "LINKQU_BASE_URL");
-  const path = resolveSecret(settings, "LINKQU_QRIS_PATH");
+  const vaPath = resolveSecret(settings, "LINKQU_VA_PATH");
+  // LinkQu's path table follows one pattern per transaction type: "…/create/<type>".
+  // Rather than make the admin fill in yet another path field, derive QRIS's path
+  // from the VA path they've already configured (swap the trailing "<type>" segment).
+  // LINKQU_QRIS_PATH still overrides this if the derived value is ever wrong.
+  const path = resolveSecret(settings, "LINKQU_QRIS_PATH") || vaPath?.replace(/\/create\/[a-z]+$/i, "/create/qris");
   const clientId = resolveSecret(settings, "LINKQU_CLIENT_ID");
   const username = resolveSecret(settings, "LINKQU_USERNAME");
   const pin = resolveSecret(settings, "LINKQU_PIN");

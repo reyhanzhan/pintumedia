@@ -32,7 +32,7 @@ export const SECRET_FIELD_GROUPS: {
       { key: "LINKQU_SERVER_KEY", label: "Client Secret (header client-secret)", type: "password" },
       { key: "LINKQU_SIGNATURE_KEY", label: "Signature Key (untuk hitung signature)", type: "password" },
       { key: "LINKQU_VA_BANK_CODE", label: "Kode Bank VA" },
-      { key: "LINKQU_QRIS_PATH", label: "Endpoint path pembuatan QRIS" },
+      { key: "LINKQU_QRIS_PATH", label: "Endpoint path QRIS (opsional — otomatis dari path VA di atas jika dikosongkan)" },
     ],
   },
   {

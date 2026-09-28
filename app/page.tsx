@@ -86,7 +86,10 @@ export default function Home() {
   const [paymentProvider, setPaymentProvider] = useState("");
   const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
   const [plan, setPlan] = useState<string>(DEFAULT_PLANS[0]?.id ?? "");
-  const selectedPlan = plans.find((item) => item.id === plan) ?? plans[0];
+  // Per-drama plans only make sense with a drama in context (mid-episode paywall);
+  // opening the paywall from the general "Langganan" profile menu has none, so hide them there.
+  const visiblePlans = selectedDrama ? plans : plans.filter((item) => item.scope !== "drama");
+  const selectedPlan = visiblePlans.find((item) => item.id === plan) ?? visiblePlans[0];
   const [checkoutEmail, setCheckoutEmail] = useState("");
   const [checkoutStage, setCheckoutStage] = useState<"select" | "pay">("select");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -750,7 +753,7 @@ export default function Home() {
               <>
                 <p>{t("Episode 1–5 gratis. Pilih akses untuk melanjutkan cerita.", "Episodes 1–5 are free. Choose a plan to continue.")}</p>
                 <div className="plan-list">
-                  {plans.map((item) => (
+                  {visiblePlans.map((item) => (
                     <button className={plan === item.id ? "selected" : ""} key={item.id} onClick={() => setPlan(item.id)}>
                       <i>{plan === item.id && <Check size={14} />}</i>
                       <span><strong>{item.label}</strong><small>{item.meta}</small></span>

@@ -453,6 +453,18 @@ export default function Home() {
     return () => window.clearTimeout(openLinkedDrama);
   }, []);
 
+  // Landed here from the /auth/confirm redirect after clicking the email link.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("confirmed") === "1") {
+      notify(t("Email berhasil dikonfirmasi. Silakan masuk.", "Email confirmed. Please sign in."));
+      window.history.replaceState(null, "", window.location.pathname);
+    } else if (params.get("auth_error") === "1") {
+      notify(t("Link konfirmasi tidak valid atau sudah kedaluwarsa. Coba daftar ulang.", "The confirmation link is invalid or expired. Please sign up again."));
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
   const goHome = () => {
     setProfileOpen(false);
     setProfileView("main");

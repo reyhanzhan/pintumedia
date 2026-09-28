@@ -1,14 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Play } from "lucide-react";
-import { getSettings } from "@/lib/settings";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { platforms } from "@/lib/platforms";
 import { Poster } from "@/components/poster";
 import type { Drama } from "@/lib/catalog";
-
-export const metadata = { title: "Rekomendasi — PintuMedia" };
-// Admin-curated picks can change anytime from the admin panel; never cache this at build time.
-export const dynamic = "force-dynamic";
 
 function dramaHref(drama: Drama) {
   const params = new URLSearchParams({
@@ -22,9 +20,60 @@ function dramaHref(drama: Drama) {
   return `/?${params.toString()}`;
 }
 
-export default async function RekomendasiPage() {
-  const settings = await getSettings();
-  const dramas = settings.recommendedDramas;
+// Full catalog browse, not an admin-curated pick list: same "nunomix" combined
+// feed the homepage shelf falls back to, paged with infinite scroll so it
+// always has content without anyone maintaining a list by hand.
+export default function RekomendasiPage() {
+  const [dramas, setDramas] = useState<Drama[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const loadingMoreRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMore) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      const response = await fetch(`/api/catalog?platform=nunomix&language=in&page=${nextPage}`);
+      const payload = (await response.json()) as { dramas?: Drama[]; hasMore?: boolean };
+      const additions = payload.dramas ?? [];
+      setDramas((current) => {
+        const known = new Set(current.map((item) => String(item.id)));
+        return [...current, ...additions.filter((item) => !known.has(String(item.id)))];
+      });
+      setPage(nextPage);
+      setHasMore(additions.length > 0 && (payload.hasMore ?? true));
+      setFailed(false);
+    } catch {
+      if (page === 0) setFailed(true);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+      loadingMoreRef.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, hasMore]);
+
+  useEffect(() => {
+    void loadMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || loading || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMore();
+    }, { rootMargin: "400px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, hasMore, loadMore]);
 
   return (
     <main className="film-main">
@@ -41,15 +90,16 @@ export default async function RekomendasiPage() {
           <Link className="profile-back" href="/" aria-label="Kembali ke beranda"><ArrowLeft size={24} /></Link>
           <div><span className="profile-kicker">PINTUMEDIA</span><h1>Rekomendasi</h1></div>
         </div>
-        {!dramas.length && <p style={{ color: "#8e9bb0" }}>Belum ada drama rekomendasi yang dipilih admin.</p>}
+        {failed && <p style={{ color: "#8e9bb0" }}>Katalog sedang tidak tersedia. Silakan coba lagi nanti.</p>}
+        {!failed && loading && <p style={{ color: "#8e9bb0" }}>Memuat...</p>}
+        {!failed && !loading && !dramas.length && <p style={{ color: "#8e9bb0" }}>Belum ada drama untuk ditampilkan.</p>}
         <div className="drama-grid recommendation-grid">
           {dramas.map((drama) => {
             const providerLabel = platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? "PintuMedia";
             return (
-              <Link className="drama-card" href={dramaHref(drama)} key={String(drama.id)}>
+              <Link className="drama-card" href={dramaHref(drama)} key={`${drama.sourceProvider ?? ""}-${drama.id}`}>
                 <span className="poster-wrap">
                   <Poster drama={drama} />
-                  <b className="recommendation-hot">HOT</b>
                   <small className="recommendation-provider">{providerLabel}</small>
                   {drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}
                   <em><Play size={23} fill="currentColor" /></em>
@@ -59,6 +109,11 @@ export default async function RekomendasiPage() {
             );
           })}
         </div>
+        {!!dramas.length && (
+          <div ref={sentinelRef} className="catalog-sentinel" aria-live="polite">
+            {loadingMore ? <><span className="video-spinner" /> Memuat lebih banyak...</> : !hasMore ? "Semua drama sudah ditampilkan." : null}
+          </div>
+        )}
       </section>
     </main>
   );

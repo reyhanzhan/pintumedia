@@ -977,7 +977,7 @@ function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { name: name || undefined } },
+          options: { data: { name: name || undefined }, emailRedirectTo: `${window.location.origin}/auth/confirm` },
         });
         if (signUpError) throw signUpError;
         if (data.session) {

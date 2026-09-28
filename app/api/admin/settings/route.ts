@@ -73,7 +73,14 @@ export async function PUT(request: Request) {
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal menyimpan pengaturan.";
+    // Supabase/PostgREST errors are plain objects, not Error instances (e.g. a
+    // CHECK constraint violation) — read `.message` off them too instead of
+    // masking the real reason behind a generic string.
+    const message =
+      error instanceof Error
+        ? error.message
+        : (typeof error === "object" && error && "message" in error ? String((error as { message: unknown }).message) : "") ||
+          "Gagal menyimpan pengaturan.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -28,7 +28,7 @@ const recommendedDramaSchema = z.object({
 const updateSchema = z.object({
   plans: z.array(planSchema).max(50),
   freeEmails: z.array(z.string().trim().email()).max(10),
-  paymentProvider: z.enum(["", "midtrans", "xendit", "linkqu", "linkqu_qris"]),
+  paymentProvider: z.enum(["", "midtrans", "xendit", "linkqu", "linkqu_qris", "ipaymu_va", "ipaymu_qris", "echopay_qris"]),
   secrets: z.record(z.string(), z.string()),
   recommendedDramas: z.array(recommendedDramaSchema).max(30),
 });

@@ -5,7 +5,7 @@ import { resolveSecret, type AppSettings } from "@/lib/settings";
 type CheckoutInput = { orderId: string; planId: string; planLabel: string; email: string; origin: string; amount: number };
 
 export type CheckoutResult =
-  | { provider: "midtrans" | "xendit"; method: "redirect"; reference: string; checkoutUrl: string }
+  | { provider: "midtrans" | "xendit" | "echopay"; method: "redirect"; reference: string; checkoutUrl: string }
   | { provider: "linkqu" | "ipaymu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
   | { provider: "linkqu" | "ipaymu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string };
 
@@ -293,6 +293,65 @@ async function createIpaymuCheckout(input: CheckoutInput, settings: AppSettings,
   return { provider: "ipaymu", method: "virtual_account", reference: input.orderId, bankCode: (json.Data.Channel as string) ?? bankCode!, vaNumber, expiresAt };
 }
 
+/**
+ * EchoPay QRIS. Endpoint, request/response fields, and the request-signature
+ * formula are copied from EchoPay's own dashboard docs (echopay.id/dashboard/docs,
+ * pasted by the merchant 2026-09-30) — not guessed.
+ *
+ *   bodyHash = lowercase_hex(sha256(rawJsonBody))
+ *   stringToSign = METHOD + "\n" + PATH + "\n" + TIMESTAMP + "\n" + bodyHash
+ *   X-Signature = hex(hmac_sha256(stringToSign, API_SECRET))
+ *
+ * We use the response's `checkout_url` (EchoPay's own hosted QR page) rather
+ * than rendering `qr_string` into a QR image ourselves — same reasoning as
+ * LinkQu QRIS: fewer places to get the rendering wrong.
+ */
+async function createEchopayCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
+  const apiKey = resolveSecret(settings, "ECHOPAY_API_KEY");
+  const apiSecret = resolveSecret(settings, "ECHOPAY_API_SECRET");
+  if (!apiKey || !apiSecret) throw new Error("Konfigurasi EchoPay belum lengkap (isi di panel admin /admin).");
+
+  const path = "/api/v1/payments/qris";
+  const body = {
+    amount: input.amount,
+    reference: input.orderId,
+    description: input.planLabel,
+    callback_url: `${input.origin}/api/webhooks/echopay`,
+    return_url: `${input.origin}/?payment=finish`,
+  };
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = crypto.randomUUID();
+  const bodyJson = JSON.stringify(body);
+  const bodyHash = createHash("sha256").update(bodyJson).digest("hex");
+  const stringToSign = `POST\n${path}\n${timestamp}\n${bodyHash}`;
+  const signature = createHmac("sha256", apiSecret).update(stringToSign).digest("hex");
+
+  const response = await fetch(`https://echopay.id${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Api-Key": apiKey,
+      "X-Timestamp": timestamp,
+      "X-Nonce": nonce,
+      "X-Signature": signature,
+    },
+    body: bodyJson,
+  });
+  const raw = await response.text();
+  let json: { success?: boolean; message?: string; data?: Record<string, unknown> };
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error(`EchoPay mengembalikan respons non-JSON (${response.status}): ${raw.slice(0, 500)}`);
+  }
+  if (!response.ok || !json.success || !json.data) throw new Error(`EchoPay menolak pembuatan QRIS: ${json.message ?? raw.slice(0, 500)}`);
+
+  const checkoutUrl = json.data.checkout_url as string | undefined;
+  if (!checkoutUrl) throw new Error(`EchoPay tidak mengembalikan checkout_url. Respons: ${raw.slice(0, 800)}`);
+  return { provider: "echopay", method: "redirect", reference: (json.data.reference as string) ?? input.orderId, checkoutUrl };
+}
+
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {
   if (settings.paymentProvider === "midtrans") return createMidtransCheckout(input, settings);
   if (settings.paymentProvider === "xendit") return createXenditCheckout(input, settings);
@@ -300,5 +359,6 @@ export async function createCheckout(input: CheckoutInput, settings: AppSettings
   if (settings.paymentProvider === "linkqu_qris") return createLinkQuQrisCheckout(input, settings);
   if (settings.paymentProvider === "ipaymu_va") return createIpaymuCheckout(input, settings, "va");
   if (settings.paymentProvider === "ipaymu_qris") return createIpaymuCheckout(input, settings, "qris");
-  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu, atau iPaymu).");
+  if (settings.paymentProvider === "echopay_qris") return createEchopayCheckout(input, settings);
+  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu, iPaymu, atau EchoPay).");
 }

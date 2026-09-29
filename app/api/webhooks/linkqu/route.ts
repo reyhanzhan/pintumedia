@@ -30,17 +30,26 @@ async function verifyLinkQuSignature(payload: Record<string, unknown>, signature
 export async function POST(request: Request) {
   const payload = (await request.json()) as Record<string, unknown>;
   const signature = request.headers.get("x-signature") ?? (payload.signature as string | undefined) ?? null;
+  const orderId = String(payload.partner_reff ?? "");
   if (!(await verifyLinkQuSignature(payload, signature))) {
+    // Log the rejected attempt so an unconfirmed signature formula (see comment
+    // above) can be diagnosed from server logs instead of silently vanishing.
+    console.error("[linkqu webhook] signature rejected", { orderId, payload });
     return Response.json({ error: "Signature tidak valid" }, { status: 401 });
   }
-  const orderId = String(payload.partner_reff ?? "");
   const rawStatus = String(payload.status ?? "").toUpperCase();
   const paid = /SUCCESS|PAID|SETTLE/.test(rawStatus);
   const failed = /FAIL|EXPIRE|CANCEL/.test(rawStatus);
   if (!orderId) return Response.json({ received: true });
+  const failureReason = (payload.message ?? payload.response_message ?? payload.description ?? null) as string | null;
   const { error } = await createAdminClient()
     .from("orders")
-    .update({ status: paid ? "paid" : failed ? "failed" : "pending", paid_at: paid ? new Date().toISOString() : null })
+    .update({
+      status: paid ? "paid" : failed ? "failed" : "pending",
+      paid_at: paid ? new Date().toISOString() : null,
+      provider_payload: payload,
+      failure_reason: failed ? failureReason : null,
+    })
     .eq("id", orderId);
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ received: true });

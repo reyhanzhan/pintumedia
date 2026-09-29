@@ -7,6 +7,7 @@ import { platforms } from "../lib/platforms";
 import type { Drama } from "../lib/catalog";
 import { DEFAULT_PLANS, formatIDR, type Plan } from "../lib/plans";
 import type { CheckoutResult } from "../lib/payments/provider";
+import { bankName } from "../lib/bank-codes";
 import { createClient, isSupabaseConfigured } from "../lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Poster } from "../components/poster";
@@ -787,7 +788,7 @@ export default function Home() {
                   {checkout.method === "virtual_account" ? (
                     <>
                       <p className="payment-message">{t("Transfer sesuai nominal ke Virtual Account berikut. Episode terbuka otomatis begitu pembayaran terverifikasi — tidak perlu konfirmasi manual.", "Transfer the exact amount to this Virtual Account. Episodes unlock automatically once payment is verified — no manual confirmation needed.")}</p>
-                      <div className="va-row"><small>{t("Bank", "Bank")}</small><strong>{checkout.bankCode}</strong></div>
+                      <div className="va-row"><small>{t("Bank", "Bank")}</small><strong>{bankName(checkout.bankCode)}</strong></div>
                       <div className="va-row">
                         <small>{t("Nomor Virtual Account", "Virtual Account number")}</small>
                         <strong>{checkout.vaNumber}</strong>

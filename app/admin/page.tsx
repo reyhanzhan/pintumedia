@@ -7,7 +7,7 @@ import { DEFAULT_PLANS, formatIDR, type Plan } from "@/lib/plans";
 import type { Drama } from "@/lib/catalog";
 import { platforms } from "@/lib/platforms";
 
-type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu" | "linkqu_qris";
+type PaymentProvider = "" | "midtrans" | "xendit" | "linkqu" | "linkqu_qris" | "ipaymu_va" | "ipaymu_qris";
 type Secrets = Partial<Record<SecretField, string>>;
 
 function newBlankPlan(): Plan {
@@ -438,6 +438,8 @@ export default function AdminPage() {
           <option value="linkqu_qris">LinkQu (QRIS)</option>
           <option value="midtrans">Midtrans</option>
           <option value="xendit">Xendit</option>
+          <option value="ipaymu_va">iPaymu (Virtual Account)</option>
+          <option value="ipaymu_qris">iPaymu (QRIS)</option>
         </select>
       </section>
 

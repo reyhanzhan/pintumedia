@@ -5,7 +5,7 @@ import { DEFAULT_PLANS, type Plan } from "@/lib/plans";
 import type { Drama } from "@/lib/catalog";
 
 export type AppSecrets = Partial<Record<SecretField, string>>;
-export type PaymentProviderId = "" | "midtrans" | "xendit" | "linkqu" | "linkqu_qris";
+export type PaymentProviderId = "" | "midtrans" | "xendit" | "linkqu" | "linkqu_qris" | "ipaymu_va" | "ipaymu_qris";
 
 export type AppSettings = {
   plans: Plan[];

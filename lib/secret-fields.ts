@@ -11,12 +11,15 @@ export const SECRET_FIELDS = [
   "MIDTRANS_SERVER_KEY",
   "XENDIT_SECRET_KEY",
   "XENDIT_WEBHOOK_TOKEN",
+  "IPAYMU_VA",
+  "IPAYMU_API_KEY",
+  "IPAYMU_VA_BANK_CODE",
 ] as const;
 
 export type SecretField = (typeof SECRET_FIELDS)[number];
 
 export const SECRET_FIELD_GROUPS: {
-  provider: "linkqu" | "midtrans" | "xendit";
+  provider: "linkqu" | "midtrans" | "xendit" | "ipaymu";
   label: string;
   fields: { key: SecretField; label: string; type?: "password" | "text" }[];
 }[] = [
@@ -46,6 +49,15 @@ export const SECRET_FIELD_GROUPS: {
     fields: [
       { key: "XENDIT_SECRET_KEY", label: "Secret Key", type: "password" },
       { key: "XENDIT_WEBHOOK_TOKEN", label: "Webhook Token", type: "password" },
+    ],
+  },
+  {
+    provider: "ipaymu",
+    label: "iPaymu (VA & QRIS)",
+    fields: [
+      { key: "IPAYMU_VA", label: "VA Number (Dashboard > Integration > API Key)" },
+      { key: "IPAYMU_API_KEY", label: "API Key", type: "password" },
+      { key: "IPAYMU_VA_BANK_CODE", label: "Kode Bank VA (bca, bni, mandiri, bri, bsi, permata, danamon, cimb, bag, bpd_bali, bmi)" },
     ],
   },
 ];

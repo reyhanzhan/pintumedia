@@ -1,13 +1,13 @@
 import "server-only";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { resolveSecret, type AppSettings } from "@/lib/settings";
 
 type CheckoutInput = { orderId: string; planId: string; planLabel: string; email: string; origin: string; amount: number };
 
 export type CheckoutResult =
   | { provider: "midtrans" | "xendit"; method: "redirect"; reference: string; checkoutUrl: string }
-  | { provider: "linkqu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
-  | { provider: "linkqu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string };
+  | { provider: "linkqu" | "ipaymu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
+  | { provider: "linkqu" | "ipaymu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string };
 
 const basicAuth = (secret: string) => `Basic ${btoa(`${secret}:`)}`;
 
@@ -213,10 +213,92 @@ async function createLinkQuQrisCheckout(input: CheckoutInput, settings: AppSetti
   return { provider: "linkqu", method: "qris", reference: input.orderId, qrImageUrl, expiresAt: expiresAt.toISOString() };
 }
 
+/**
+ * iPaymu Direct Payment (VA or QRIS). Signature/endpoint/field names confirmed
+ * against iPaymu's official public Postman collection and sample scripts
+ * (docs.ipaymu.com, github.com/ipaymu/ipaymu-payment-v2-sample-nodejs) on
+ * 2026-09-29 — this is documented behavior, not guesswork like LinkQu's
+ * webhook formula.
+ *
+ *   bodyHash = lowercase_hex(sha256(JSON.stringify(body)))
+ *   stringToSign = "POST:" + va + ":" + bodyHash + ":" + apiKey
+ *   signature = hex(hmac_sha256(stringToSign, apiKey))
+ *
+ * QRIS note: iPaymu fixes QRIS expiry at ~5 minutes server-side and ignores
+ * any `expired`/`expiredType` we send for it (VA expiry is customizable).
+ */
+function ipaymuSignature(method: string, va: string, body: unknown, apiKey: string) {
+  const bodyHash = createHash("sha256").update(JSON.stringify(body)).digest("hex").toLowerCase();
+  const stringToSign = `${method}:${va}:${bodyHash}:${apiKey}`;
+  return createHmac("sha256", apiKey).update(stringToSign).digest("hex");
+}
+
+function ipaymuTimestamp() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+async function createIpaymuCheckout(input: CheckoutInput, settings: AppSettings, method: "va" | "qris"): Promise<CheckoutResult> {
+  const va = resolveSecret(settings, "IPAYMU_VA");
+  const apiKey = resolveSecret(settings, "IPAYMU_API_KEY");
+  const bankCode = resolveSecret(settings, "IPAYMU_VA_BANK_CODE");
+  if (!va || !apiKey) throw new Error("Konfigurasi iPaymu belum lengkap (isi di panel admin /admin).");
+  if (method === "va" && !bankCode) throw new Error("Isi Kode Bank VA iPaymu di panel admin.");
+
+  const production = process.env.PAYMENT_ENV === "production";
+  const base = production ? "https://my.ipaymu.com/api/v2" : "https://sandbox.ipaymu.com/api/v2";
+  const body = {
+    name: (input.email.split("@")[0] || "PintuMedia").slice(0, 40),
+    phone: "081999999999",
+    email: input.email,
+    amount: input.amount,
+    notifyUrl: `${input.origin}/api/webhooks/ipaymu`,
+    referenceId: input.orderId,
+    paymentMethod: method,
+    paymentChannel: method === "va" ? bankCode : "mpm",
+    comments: input.planLabel,
+    ...(method === "va" ? { expired: 24, expiredType: "hours" } : {}),
+  };
+  const signature = ipaymuSignature("POST", va, body, apiKey);
+  const response = await fetch(`${base}/payment/direct`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", va, signature, timestamp: ipaymuTimestamp() },
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw new Error(`iPaymu menolak pembuatan pembayaran (${response.status}): ${raw.slice(0, 800)}`);
+  let json: { Status?: number; Message?: string; Data?: Record<string, unknown> };
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error(`iPaymu mengembalikan respons non-JSON: ${raw.slice(0, 500)}`);
+  }
+  if (json.Status !== 200 || !json.Data) throw new Error(`iPaymu menolak pembuatan pembayaran: ${json.Message ?? raw.slice(0, 500)}`);
+
+  const expiresAt = (() => {
+    const expiredRaw = json.Data?.Expired as string | undefined;
+    if (!expiredRaw) return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const parsed = new Date(expiredRaw.replace(" ", "T") + "+07:00");
+    return Number.isNaN(parsed.getTime()) ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : parsed.toISOString();
+  })();
+
+  if (method === "qris") {
+    const qrImageUrl = json.Data.QrImage as string | undefined;
+    if (!qrImageUrl) throw new Error(`iPaymu tidak mengembalikan gambar QRIS. Respons: ${raw.slice(0, 800)}`);
+    return { provider: "ipaymu", method: "qris", reference: input.orderId, qrImageUrl, expiresAt };
+  }
+  const vaNumber = json.Data.PaymentNo as string | undefined;
+  if (!vaNumber) throw new Error(`iPaymu tidak mengembalikan nomor VA. Respons: ${raw.slice(0, 800)}`);
+  return { provider: "ipaymu", method: "virtual_account", reference: input.orderId, bankCode: (json.Data.Channel as string) ?? bankCode!, vaNumber, expiresAt };
+}
+
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {
   if (settings.paymentProvider === "midtrans") return createMidtransCheckout(input, settings);
   if (settings.paymentProvider === "xendit") return createXenditCheckout(input, settings);
   if (settings.paymentProvider === "linkqu") return createLinkQuCheckout(input, settings);
   if (settings.paymentProvider === "linkqu_qris") return createLinkQuQrisCheckout(input, settings);
-  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu VA, atau LinkQu QRIS).");
+  if (settings.paymentProvider === "ipaymu_va") return createIpaymuCheckout(input, settings, "va");
+  if (settings.paymentProvider === "ipaymu_qris") return createIpaymuCheckout(input, settings, "qris");
+  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu, atau iPaymu).");
 }

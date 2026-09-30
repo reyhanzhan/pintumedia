@@ -20,6 +20,18 @@ export async function GET(request: Request) {
   const language = requestUrl.searchParams.get("language") === "en" ? "en" : "in";
   const requestedPage = Number(requestUrl.searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100) : 1;
+  // "hot": recommendation feed interleaved from providers whose video CDNs measured fast
+  // (MB/s). The default "nunomix" feed streams from a single slow origin (~10 KB/s through
+  // our proxy), so recommendations must not come from it.
+  if (platform === "hot" && process.env.NUNODRAMA_API_TOKEN) {
+    const HOT_PROVIDERS = ["netshort", "melolo", "dramabox", "goodshort"];
+    const settled = await Promise.allSettled(HOT_PROVIDERS.map((provider) => fetchNunoCatalog(provider, language, page)));
+    const lists = settled.map((result) => (result.status === "fulfilled" ? result.value : []));
+    const dramas = Array.from({ length: Math.max(0, ...lists.map((list) => list.length)) }, (_, index) => lists.map((list) => list[index])).flat().filter(Boolean);
+    if (!dramas.length) return NextResponse.json({ source: "upstream-unavailable", platform, dramas: [], upstreamUnavailable: true }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ source: "nunodrama-api", platform, page, hasMore: dramas.length > 0, dramas }, { headers: { "Cache-Control": "public, s-maxage=180, stale-while-revalidate=300" } });
+  }
+
   if (!platforms.some((item) => item.slug === platform)) {
     return NextResponse.json({ error: "Unknown platform" }, { status: 400 });
   }

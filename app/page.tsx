@@ -84,6 +84,7 @@ export default function Home() {
   const unlocked = globalUnlocked || (!!selectedDrama && unlockedDramaIds.has(String(selectedDrama.id)));
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [recommendedDramas, setRecommendedDramas] = useState<Drama[]>([]);
+  const [hotDramas, setHotDramas] = useState<Drama[]>([]);
   const [paymentProvider, setPaymentProvider] = useState("");
   const [plans, setPlans] = useState<Plan[]>(DEFAULT_PLANS);
   const [plan, setPlan] = useState<string>(DEFAULT_PLANS[0]?.id ?? "");
@@ -325,6 +326,14 @@ export default function Home() {
         if (data.recommendedDramas?.length) setRecommendedDramas(data.recommendedDramas);
         setPaymentProvider(data.paymentProvider ?? "");
       })
+      .catch(() => undefined);
+  }, []);
+
+  // "Hot" shelf fallback when no admin-curated list exists: same fast-provider mix as /rekomendasi.
+  useEffect(() => {
+    fetch("/api/catalog?platform=hot&language=in&page=1")
+      .then((response) => response.json() as Promise<{ dramas?: Drama[] }>)
+      .then((data) => { if (data.dramas?.length) setHotDramas(data.dramas.slice(0, 6)); })
       .catch(() => undefined);
   }, []);
 
@@ -640,9 +649,9 @@ export default function Home() {
             try { localStorage.setItem("pintumedia.watch-history", JSON.stringify(next)); } catch { /* History is optional. */ }
             return next;
           })} t={t} />}
-          {platform === "PintuMedia" && !!(recommendedDramas.length || catalog.length) && (
+          {platform === "PintuMedia" && !!(recommendedDramas.length || hotDramas.length || catalog.length) && (
             <RecommendationShelf
-              dramas={recommendedDramas.length ? recommendedDramas : catalog.slice(0, 6)}
+              dramas={recommendedDramas.length ? recommendedDramas : hotDramas.length ? hotDramas : catalog.slice(0, 6)}
               curated={!!recommendedDramas.length}
               provider={platform}
               onSelect={openDrama}

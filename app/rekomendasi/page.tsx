@@ -27,8 +27,8 @@ function dramaHref(drama: Drama) {
   return `/?${params.toString()}`;
 }
 
-// Full catalog browse, not an admin-curated pick list: same "nunomix" combined
-// feed the homepage shelf falls back to, paged with infinite scroll so it
+// Full catalog browse, not an admin-curated pick list: the "hot" feed (a mix of
+// providers with fast video CDNs — see /api/catalog), paged with infinite scroll so it
 // always has content without anyone maintaining a list by hand.
 export default function RekomendasiPage() {
   const [dramas, setDramas] = useState<Drama[]>([]);
@@ -46,7 +46,7 @@ export default function RekomendasiPage() {
     setLoadingMore(true);
     const nextPage = page + 1;
     try {
-      const response = await fetch(`/api/catalog?platform=nunomix&language=in&page=${nextPage}`);
+      const response = await fetch(`/api/catalog?platform=hot&language=in&page=${nextPage}`);
       const payload = (await response.json()) as { dramas?: Drama[]; hasMore?: boolean };
       const additions = payload.dramas ?? [];
       setDramas((current) => {

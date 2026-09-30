@@ -27,12 +27,15 @@ export async function GET(request: Request) {
         ? { Referer: "https://www.bilibili.tv/", "User-Agent": BROWSER_UA, Accept: "video/mp4,video/*;q=0.9,*/*;q=0.8" }
         : { "User-Agent": BROWSER_UA, Accept: "video/mp4,video/*;q=0.9,*/*;q=0.8" };
     if (range) headers.Range = range;
+    const controller = new AbortController();
+    const headerTimer = setTimeout(() => controller.abort(), 30000);
+    request.signal.addEventListener("abort", () => controller.abort());
     const upstream = await fetch(upstreamUrl, {
       headers,
       cache: "no-store",
       redirect: "follow",
-      signal: AbortSignal.timeout(30000),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(headerTimer));
     if (!upstream.ok && upstream.status !== 206) {
       return Response.json({ error: `CDN provider mengembalikan ${upstream.status}.` }, { status: 502 });
     }

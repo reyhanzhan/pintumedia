@@ -50,7 +50,10 @@ async function fetchFollowingSafeRedirects(url: URL, headers: Record<string, str
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertPublicUrl(current);
-    const response = await fetch(current.toString(), { headers, cache: "no-store", redirect: "manual", signal: AbortSignal.timeout(30000) });
+    // Timeout covers only the wait for response headers; it must not cut off the body stream.
+    const controller = new AbortController();
+    const headerTimer = setTimeout(() => controller.abort(), 30000);
+    const response = await fetch(current.toString(), { headers, cache: "no-store", redirect: "manual", signal: controller.signal }).finally(() => clearTimeout(headerTimer));
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (!location) return response;

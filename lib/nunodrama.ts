@@ -221,7 +221,23 @@ export async function fetchNunoCatalog(provider: string, language: "in" | "en", 
   return catalog;
 }
 
-export async function fetchNunoPlayback(provider: string, sourceId: string, episode: number) {
+// /play, /media and every Range request from the <video> element all resolve the
+// same stream URL; without a cache each of them re-hits the (slow) upstream API.
+const PLAYBACK_TTL_MS = 3 * 60_000;
+const playbackCache = new Map<string, { at: number; value: Promise<{ provider: string; sourceId: string; episode: number; url: string }> }>();
+
+export function fetchNunoPlayback(provider: string, sourceId: string, episode: number) {
+  const key = `${provider}|${sourceId}|${episode}`;
+  const hit = playbackCache.get(key);
+  if (hit && Date.now() - hit.at < PLAYBACK_TTL_MS) return hit.value;
+  const value = resolveNunoPlayback(provider, sourceId, episode);
+  playbackCache.set(key, { at: Date.now(), value });
+  value.catch(() => playbackCache.delete(key));
+  if (playbackCache.size > 200) playbackCache.delete(playbackCache.keys().next().value as string);
+  return value;
+}
+
+async function resolveNunoPlayback(provider: string, sourceId: string, episode: number) {
   const config = NUNO_PROVIDERS[provider];
   if (!config) throw new Error(`Provider ${provider} belum didukung adapter NunoDrama.`);
   const payload = await requestJson(`/api/${config.apiSlug}/stream`, {

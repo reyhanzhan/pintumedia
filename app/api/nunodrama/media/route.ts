@@ -29,7 +29,6 @@ export async function GET(request: Request) {
     if (range) headers.Range = range;
     const controller = new AbortController();
     const headerTimer = setTimeout(() => controller.abort(), 30000);
-    request.signal.addEventListener("abort", () => controller.abort());
     const upstream = await fetch(upstreamUrl, {
       headers,
       cache: "no-store",

@@ -7,7 +7,8 @@ type CheckoutInput = { orderId: string; planId: string; planLabel: string; email
 export type CheckoutResult =
   | { provider: "midtrans" | "xendit" | "echopay"; method: "redirect"; reference: string; checkoutUrl: string }
   | { provider: "linkqu" | "ipaymu"; method: "virtual_account"; reference: string; bankCode: string; vaNumber: string; expiresAt: string }
-  | { provider: "linkqu" | "ipaymu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string };
+  | { provider: "linkqu" | "ipaymu"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string }
+  | { provider: "klikqris"; method: "qris"; reference: string; qrImageUrl: string; expiresAt: string; totalAmount: number; signature: string };
 
 const basicAuth = (secret: string) => `Basic ${btoa(`${secret}:`)}`;
 
@@ -352,6 +353,47 @@ async function createEchopayCheckout(input: CheckoutInput, settings: AppSettings
   return { provider: "echopay", method: "redirect", reference: (json.data.reference as string) ?? input.orderId, checkoutUrl };
 }
 
+/**
+ * KlikQRIS dynamic QRIS. Endpoint/fields copied from the merchant's own
+ * klikqris.com developer docs (pasted 2026-09-30). The API appends a unique
+ * code to the amount, so the customer must pay `total_amount`, not `amount`.
+ * The `signature` returned here is stored on the order and compared against
+ * the one in the webhook payload (their documented anti-fake-webhook check).
+ */
+async function createKlikqrisCheckout(input: CheckoutInput, settings: AppSettings): Promise<CheckoutResult> {
+  const apiKey = resolveSecret(settings, "KLIKQRIS_API_KEY");
+  const idMerchant = resolveSecret(settings, "KLIKQRIS_ID_MERCHANT");
+  if (!apiKey || !idMerchant) throw new Error("Konfigurasi KlikQRIS belum lengkap (isi di panel admin /admin).");
+
+  const response = await fetch("https://klikqris.com/api/qris/create", {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json", "x-api-key": apiKey, id_merchant: idMerchant },
+    body: JSON.stringify({
+      order_id: input.orderId,
+      id_merchant: idMerchant,
+      amount: input.amount,
+      keterangan: input.planLabel,
+      callback_url: `${input.origin}/api/webhooks/klikqris`,
+    }),
+  });
+  const raw = await response.text();
+  let json: { status?: boolean; message?: string; data?: Record<string, unknown> };
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    throw new Error(`KlikQRIS mengembalikan respons non-JSON (${response.status}): ${raw.slice(0, 500)}`);
+  }
+  if (!response.ok || !json.status || !json.data) throw new Error(`KlikQRIS menolak pembuatan QRIS: ${json.message ?? raw.slice(0, 500)}`);
+
+  const data = json.data;
+  const qrImageUrl = (data.qris_image as string | undefined) || (data.qris_url as string | undefined);
+  const signature = data.signature as string | undefined;
+  const totalAmount = Number(data.total_amount);
+  if (!qrImageUrl || !signature || !Number.isFinite(totalAmount)) throw new Error(`Respons KlikQRIS tidak lengkap: ${raw.slice(0, 800)}`);
+  const expiresAt = new Date(Date.now() + (Number(data.expired_menit) || 60) * 60_000).toISOString();
+  return { provider: "klikqris", method: "qris", reference: input.orderId, qrImageUrl, expiresAt, totalAmount, signature };
+}
+
 export async function createCheckout(input: CheckoutInput, settings: AppSettings) {
   if (settings.paymentProvider === "midtrans") return createMidtransCheckout(input, settings);
   if (settings.paymentProvider === "xendit") return createXenditCheckout(input, settings);
@@ -360,5 +402,6 @@ export async function createCheckout(input: CheckoutInput, settings: AppSettings
   if (settings.paymentProvider === "ipaymu_va") return createIpaymuCheckout(input, settings, "va");
   if (settings.paymentProvider === "ipaymu_qris") return createIpaymuCheckout(input, settings, "qris");
   if (settings.paymentProvider === "echopay_qris") return createEchopayCheckout(input, settings);
-  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu, iPaymu, atau EchoPay).");
+  if (settings.paymentProvider === "klikqris_qris") return createKlikqrisCheckout(input, settings);
+  throw new Error("Pilih metode pembayaran di panel admin (midtrans, xendit, LinkQu, iPaymu, EchoPay, atau KlikQRIS).");
 }

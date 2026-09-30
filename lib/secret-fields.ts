@@ -16,12 +16,14 @@ export const SECRET_FIELDS = [
   "IPAYMU_VA_BANK_CODE",
   "ECHOPAY_API_KEY",
   "ECHOPAY_API_SECRET",
+  "KLIKQRIS_API_KEY",
+  "KLIKQRIS_ID_MERCHANT",
 ] as const;
 
 export type SecretField = (typeof SECRET_FIELDS)[number];
 
 export const SECRET_FIELD_GROUPS: {
-  provider: "linkqu" | "midtrans" | "xendit" | "ipaymu" | "echopay";
+  provider: "linkqu" | "midtrans" | "xendit" | "ipaymu" | "echopay" | "klikqris";
   label: string;
   fields: { key: SecretField; label: string; type?: "password" | "text" }[];
 }[] = [
@@ -68,6 +70,14 @@ export const SECRET_FIELD_GROUPS: {
     fields: [
       { key: "ECHOPAY_API_KEY", label: "API Key (X-Api-Key)", type: "password" },
       { key: "ECHOPAY_API_SECRET", label: "API Secret (untuk HMAC signature)", type: "password" },
+    ],
+  },
+  {
+    provider: "klikqris",
+    label: "KlikQRIS (QRIS)",
+    fields: [
+      { key: "KLIKQRIS_API_KEY", label: "API Key (x-api-key)", type: "password" },
+      { key: "KLIKQRIS_ID_MERCHANT", label: "ID Merchant" },
     ],
   },
 ];

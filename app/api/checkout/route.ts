@@ -48,9 +48,11 @@ export async function POST(request: Request) {
       provider: checkout.provider,
       provider_reference: checkout.reference,
       status: "pending",
+      provider_payload: checkout.provider === "klikqris" ? { signature: checkout.signature } : null,
     });
     if (error) throw error;
-    return NextResponse.json({ orderId, checkout });
+    const publicCheckout = checkout.provider === "klikqris" ? { ...checkout, signature: undefined } : checkout;
+    return NextResponse.json({ orderId, checkout: publicCheckout });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Checkout gagal dibuat.";
     return NextResponse.json({ error: message }, { status: 400 });

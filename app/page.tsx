@@ -800,7 +800,7 @@ export default function Home() {
                     <>
                       <p className="payment-message">{t("Scan QR berikut pakai aplikasi e-wallet atau m-banking apa saja yang mendukung QRIS. Episode terbuka otomatis begitu pembayaran terverifikasi.", "Scan this QR with any QRIS-compatible e-wallet or banking app. Episodes unlock automatically once payment is verified.")}</p>
                       <img src={checkout.qrImageUrl} alt="QRIS" className="qris-image" width={320} height={320} />
-                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR(selectedPlan?.amount ?? 0)}</strong></div>
+                      <div className="va-row"><small>{t("Jumlah", "Amount")}</small><strong>{formatIDR("totalAmount" in checkout ? checkout.totalAmount : selectedPlan?.amount ?? 0)}</strong></div>
                     </>
                   ) : (
                     <>

@@ -257,32 +257,33 @@ export default function Home() {
       setPlaybackUrl("");
       setPlaybackError("");
       setPlaybackLoading(true);
+      let timedOut = false;
       const query = new URLSearchParams({ provider: sourceProvider, id: sourceId, episode: String(episode) });
       try {
-        const response = await fetch(`/api/nunodrama/play?${query}`, { signal: controller.signal, headers: { Accept: "application/json" } });
+        const slowTimer = window.setTimeout(() => { timedOut = true; controller.abort(); }, 40000);
+        const response = await fetch(`/api/nunodrama/play?${query}`, { signal: controller.signal, headers: { Accept: "application/json" } }).finally(() => window.clearTimeout(slowTimer));
         const payload = await response.json() as { url?: string; isHls?: boolean; fallbackUrl?: string; error?: string };
         if (!response.ok || !payload.url) throw new Error(payload.error || "Video tidak tersedia");
         if (!controller.signal.aborted) { setPlaybackUrl(payload.url); setPlaybackIsHls(!!payload.isHls); setPlaybackFallback(payload.fallbackUrl); }
       } catch (error) {
-        if (!controller.signal.aborted) setPlaybackError(error instanceof Error ? error.message : "Video tidak tersedia");
+        if (controller.signal.aborted && !timedOut) return; // superseded by another episode/unmount
+        setPlaybackError(timedOut ? "Server video lambat merespons. Coba lagi atau pilih episode lain." : error instanceof Error ? error.message : "Video tidak tersedia");
       } finally {
-        if (!controller.signal.aborted) setPlaybackLoading(false);
+        if (!controller.signal.aborted || timedOut) setPlaybackLoading(false);
       }
     };
     void loadPlayback();
     return () => controller.abort();
   }, [watching, selectedDrama, episode, unlocked]);
 
-  // Warm the server playback cache: episode 1 when a drama's detail opens, the next
-  // episode while one is playing, so pressing Play / moving on doesn't wait on the upstream API.
+  // Warm the server playback cache with episode 1 when a drama's detail opens, so pressing
+  // Play doesn't wait on the upstream API. Not while watching: a concurrent lookup for the
+  // next episode would compete with the one the viewer is actually waiting for.
   useEffect(() => {
-    if (!selectedDrama?.sourceProvider || !selectedDrama.sourceId) return;
-    const target = watching ? episode + 1 : 1;
-    if (watching && target > (selectedDrama.episodes || 0)) return;
-    if (target > 5 && !unlocked) return;
-    const query = new URLSearchParams({ provider: selectedDrama.sourceProvider, id: selectedDrama.sourceId, episode: String(target) });
+    if (!selectedDrama?.sourceProvider || !selectedDrama.sourceId || watching) return;
+    const query = new URLSearchParams({ provider: selectedDrama.sourceProvider, id: selectedDrama.sourceId, episode: "1" });
     void fetch(`/api/nunodrama/play?${query}`).catch(() => undefined);
-  }, [selectedDrama, watching, episode, unlocked]);
+  }, [selectedDrama, watching]);
 
   const activePlatform = platforms.find((item) => item.name === platform) ?? platforms[0];
   const filteredPlatforms = useMemo(
@@ -1117,7 +1118,7 @@ function HlsVideo({ src, fallbackSrc, isHls, lowData, onError }: { src: string; 
 
   return (
     <>
-      <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="auto" onError={() => failRef.current()} onWaiting={() => setBuffering(true)} onPlaying={() => { startedRef.current = true; setBuffering(false); }} onCanPlay={() => setBuffering(false)} />
+      <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="metadata" onError={() => failRef.current()} onWaiting={() => setBuffering(true)} onPlaying={() => { startedRef.current = true; setBuffering(false); }} onCanPlay={() => setBuffering(false)} />
       {buffering && <span className="video-spinner" style={{ position: "absolute", inset: 0, margin: "auto", pointerEvents: "none" }} aria-hidden />}
     </>
   );

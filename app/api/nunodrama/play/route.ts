@@ -20,7 +20,10 @@ export async function GET(request: Request) {
     // fetches) — route those through our own https proxy instead. m3u8 manifests
     // need the manifest-rewriting proxy (segments are separate requests); single
     // files (mp4, or Bstation which needs a special Referer) use the plain one.
-    const isHls = /\.m3u8(?:\?|$)/i.test(playback.url);
+    // Match "m3u8" anywhere: some providers (dramaverse, shortmax) return
+    // .../proxy_m3u8?url=..., which a strict ".m3u8" test missed — the manifest then went
+    // into a plain <video src>, which only Safari can play (black + endless spinner elsewhere).
+    const isHls = /m3u8/i.test(playback.url);
     const isHttp = /^http:\/\//i.test(playback.url);
     let url = playback.url;
     if (isHls && isHttp) {

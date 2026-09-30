@@ -687,7 +687,7 @@ export default function Home() {
               </div>
             </div>
             <div className="video-shell">
-              {playbackUrl ? <HlsVideo key={playbackUrl} src={playbackUrl} fallbackSrc={playbackFallback} isHls={playbackIsHls} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
+              {playbackUrl ? <HlsVideo key={playbackUrl} lowData={recommendedDramas.some((item) => String(item.id) === String(selectedDrama.id) && item.sourceId === selectedDrama.sourceId)} src={playbackUrl} fallbackSrc={playbackFallback} isHls={playbackIsHls} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
                 <div className="video-poster"><Poster drama={selectedDrama} /></div>
                 <div className="video-overlay" />
                 <button className="video-play" disabled={playbackLoading} onClick={() => notify(playbackLoading ? t("Menyiapkan video...", "Preparing video...") : t("Video belum tersedia", "Video is not available"))}>{playbackLoading ? <span className="video-spinner" /> : <Play fill="currentColor" />}</button>
@@ -1071,7 +1071,7 @@ function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string
 // Mounted with key={src} so all state resets per video. For plain-http sources the server sends a
 // direct https src plus a proxy fallbackSrc: if the direct one errors or hasn't started within 10s,
 // we switch to the proxy (the previously-working path), so nothing that played before stops playing.
-function HlsVideo({ src, fallbackSrc, isHls, onError }: { src: string; fallbackSrc?: string; isHls: boolean; onError: () => void }) {
+function HlsVideo({ src, fallbackSrc, isHls, lowData, onError }: { src: string; fallbackSrc?: string; isHls: boolean; lowData?: boolean; onError: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const startedRef = useRef(false);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -1097,7 +1097,13 @@ function HlsVideo({ src, fallbackSrc, isHls, onError }: { src: string; fallbackS
     if (isHls && Hls.isSupported()) {
       // Weak phones: start at the lowest quality so playback begins fast, then let ABR
       // climb; cap quality to the player size and keep the buffer small.
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: false, startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 20, maxMaxBufferLength: 40 });
+      // lowData (recommended "hot" films): lock to the lowest quality and buffer further ahead,
+      // trading sharpness for playback that doesn't keep stalling on slow phones/connections.
+      const hls = new Hls({
+        enableWorker: true, lowLatencyMode: false, startLevel: 0, capLevelToPlayerSize: true,
+        maxBufferLength: lowData ? 40 : 20, maxMaxBufferLength: lowData ? 60 : 40,
+        ...(lowData ? { autoLevelCapping: 0 } : { abrBandWidthUpFactor: 0.6 }),
+      });
       hls.loadSource(activeSrc);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { void video.play().catch(() => undefined); });
@@ -1107,7 +1113,7 @@ function HlsVideo({ src, fallbackSrc, isHls, onError }: { src: string; fallbackS
     video.src = activeSrc;
     void video.play().catch(() => undefined);
     return () => { video.removeAttribute("src"); video.load(); };
-  }, [activeSrc, isHls]);
+  }, [activeSrc, isHls, lowData]);
 
   return (
     <>

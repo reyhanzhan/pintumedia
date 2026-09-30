@@ -99,6 +99,7 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [playbackUrl, setPlaybackUrl] = useState("");
   const [playbackIsHls, setPlaybackIsHls] = useState(false);
+  const [playbackFallback, setPlaybackFallback] = useState<string | undefined>(undefined);
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [playbackError, setPlaybackError] = useState("");
   const [catalogResult, setCatalogResult] = useState<{ platform: string; language: "id" | "en"; page: number; hasMore: boolean; dramas: Drama[]; error?: boolean; upstreamUnavailable?: boolean; externalOnly?: boolean; integrationUnavailable?: boolean }>({ platform: "", language: "id", page: 0, hasMore: false, dramas: [] });
@@ -259,9 +260,9 @@ export default function Home() {
       const query = new URLSearchParams({ provider: sourceProvider, id: sourceId, episode: String(episode) });
       try {
         const response = await fetch(`/api/nunodrama/play?${query}`, { signal: controller.signal, headers: { Accept: "application/json" } });
-        const payload = await response.json() as { url?: string; isHls?: boolean; error?: string };
+        const payload = await response.json() as { url?: string; isHls?: boolean; fallbackUrl?: string; error?: string };
         if (!response.ok || !payload.url) throw new Error(payload.error || "Video tidak tersedia");
-        if (!controller.signal.aborted) { setPlaybackUrl(payload.url); setPlaybackIsHls(!!payload.isHls); }
+        if (!controller.signal.aborted) { setPlaybackUrl(payload.url); setPlaybackIsHls(!!payload.isHls); setPlaybackFallback(payload.fallbackUrl); }
       } catch (error) {
         if (!controller.signal.aborted) setPlaybackError(error instanceof Error ? error.message : "Video tidak tersedia");
       } finally {
@@ -686,7 +687,7 @@ export default function Home() {
               </div>
             </div>
             <div className="video-shell">
-              {playbackUrl ? <HlsVideo src={playbackUrl} isHls={playbackIsHls} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
+              {playbackUrl ? <HlsVideo key={playbackUrl} src={playbackUrl} fallbackSrc={playbackFallback} isHls={playbackIsHls} onError={() => setPlaybackError(t("Video gagal dimuat dari CDN provider. Coba episode lain.", "The video could not be loaded from the provider CDN. Try another episode."))} /> : <>
                 <div className="video-poster"><Poster drama={selectedDrama} /></div>
                 <div className="video-overlay" />
                 <button className="video-play" disabled={playbackLoading} onClick={() => notify(playbackLoading ? t("Menyiapkan video...", "Preparing video...") : t("Video belum tersedia", "Video is not available"))}>{playbackLoading ? <span className="video-spinner" /> : <Play fill="currentColor" />}</button>
@@ -1067,13 +1068,28 @@ function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string
   );
 }
 
-function HlsVideo({ src, isHls, onError }: { src: string; isHls: boolean; onError: () => void }) {
+// Mounted with key={src} so all state resets per video. For plain-http sources the server sends a
+// direct https src plus a proxy fallbackSrc: if the direct one errors or hasn't started within 10s,
+// we switch to the proxy (the previously-working path), so nothing that played before stops playing.
+function HlsVideo({ src, fallbackSrc, isHls, onError }: { src: string; fallbackSrc?: string; isHls: boolean; onError: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const onErrorRef = useRef(onError);
+  const startedRef = useRef(false);
+  const [usingFallback, setUsingFallback] = useState(false);
   const [buffering, setBuffering] = useState(true);
+  const activeSrc = usingFallback && fallbackSrc ? fallbackSrc : src;
 
-  useEffect(() => { onErrorRef.current = onError; }, [onError]);
-  useEffect(() => { setBuffering(true); }, [src]);
+  const fail = () => {
+    if (!usingFallback && fallbackSrc) { setBuffering(true); setUsingFallback(true); }
+    else onError();
+  };
+  const failRef = useRef(fail);
+  useEffect(() => { failRef.current = fail; });
+
+  useEffect(() => {
+    if (usingFallback || !fallbackSrc) return;
+    const timer = window.setTimeout(() => { if (!startedRef.current) failRef.current(); }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [fallbackSrc, usingFallback]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1082,20 +1098,20 @@ function HlsVideo({ src, isHls, onError }: { src: string; isHls: boolean; onErro
       // Weak phones: start at the lowest quality so playback begins fast, then let ABR
       // climb; cap quality to the player size and keep the buffer small.
       const hls = new Hls({ enableWorker: true, lowLatencyMode: false, startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 20, maxMaxBufferLength: 40 });
-      hls.loadSource(src);
+      hls.loadSource(activeSrc);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { void video.play().catch(() => undefined); });
-      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) onErrorRef.current(); });
+      hls.on(Hls.Events.ERROR, (_event, data) => { if (data.fatal) failRef.current(); });
       return () => hls.destroy();
     }
-    video.src = src;
+    video.src = activeSrc;
     void video.play().catch(() => undefined);
     return () => { video.removeAttribute("src"); video.load(); };
-  }, [src, isHls]);
+  }, [activeSrc, isHls]);
 
   return (
     <>
-      <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="auto" onError={() => onErrorRef.current()} onWaiting={() => setBuffering(true)} onPlaying={() => setBuffering(false)} onCanPlay={() => setBuffering(false)} />
+      <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="auto" onError={() => failRef.current()} onWaiting={() => setBuffering(true)} onPlaying={() => { startedRef.current = true; setBuffering(false); }} onCanPlay={() => setBuffering(false)} />
       {buffering && <span className="video-spinner" style={{ position: "absolute", inset: 0, margin: "auto", pointerEvents: "none" }} aria-hidden />}
     </>
   );

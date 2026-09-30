@@ -20,12 +20,19 @@ export async function GET(request: Request) {
     const isHls = /\.m3u8(?:\?|$)/i.test(playback.url);
     const isHttp = /^http:\/\//i.test(playback.url);
     let url = playback.url;
-    if (isHls && isHttp) {
-      url = `/api/nunodrama/hlsproxy?u=${encodeURIComponent(playback.url)}`;
-    } else if (provider === "bstation" || (isHttp && !isHls)) {
-      url = `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`;
+    let fallbackUrl: string | undefined;
+    const proxyUrl = isHls
+      ? `/api/nunodrama/hlsproxy?u=${encodeURIComponent(playback.url)}`
+      : `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`;
+    if (provider === "bstation") {
+      url = proxyUrl; // needs a Bilibili Referer, so it must go through the server
+    } else if (isHttp) {
+      // Try the CDN directly over https first (faster: no hop through our hosting);
+      // the player falls back to the proxy if that fails or doesn't start in time.
+      url = playback.url.replace(/^http:/i, "https:");
+      fallbackUrl = proxyUrl;
     }
-    return NextResponse.json({ ...playback, url, isHls }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ ...playback, url, isHls, fallbackUrl }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Playback NunoDrama tidak tersedia.";
     return NextResponse.json({ error: message }, { status: 502 });

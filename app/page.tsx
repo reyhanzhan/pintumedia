@@ -320,19 +320,19 @@ export default function Home() {
   useEffect(() => {
     const hydrateCheckoutEmail = window.setTimeout(() => {
       const savedEmail = window.localStorage.getItem("pintumedia_email");
-      if (!savedEmail) return;
-      setCheckoutEmail(savedEmail);
-      fetch(`/api/entitlements/check?email=${encodeURIComponent(savedEmail)}`)
+      if (savedEmail) setCheckoutEmail(savedEmail);
+      // Also runs without a saved email: the server falls back to the logged-in account.
+      fetch(`/api/entitlements/check?email=${encodeURIComponent(savedEmail ?? "")}`)
         .then((response) => response.json() as Promise<{ unlocked: boolean; global?: boolean }>)
         .then((data) => { if (data.global) setGlobalUnlocked(true); })
         .catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(hydrateCheckoutEmail);
-  }, []);
+  }, [user]);
 
   // When opening a drama, check whether this email already unlocked this one specifically.
   useEffect(() => {
-    if (!selectedDrama || globalUnlocked || !checkoutEmail) return;
+    if (!selectedDrama || globalUnlocked) return;
     const dramaId = String(selectedDrama.id);
     if (unlockedDramaIds.has(dramaId)) return;
     fetch(`/api/entitlements/check?email=${encodeURIComponent(checkoutEmail)}&dramaId=${encodeURIComponent(dramaId)}`)
@@ -342,7 +342,7 @@ export default function Home() {
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDrama, checkoutEmail, globalUnlocked]);
+  }, [selectedDrama, checkoutEmail, globalUnlocked, user]);
 
   const handleCheckout = async () => {
     const email = checkoutEmail.trim();

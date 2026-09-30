@@ -272,6 +272,17 @@ export default function Home() {
     return () => controller.abort();
   }, [watching, selectedDrama, episode, unlocked]);
 
+  // Warm the server playback cache: episode 1 when a drama's detail opens, the next
+  // episode while one is playing, so pressing Play / moving on doesn't wait on the upstream API.
+  useEffect(() => {
+    if (!selectedDrama?.sourceProvider || !selectedDrama.sourceId) return;
+    const target = watching ? episode + 1 : 1;
+    if (watching && target > (selectedDrama.episodes || 0)) return;
+    if (target > 5 && !unlocked) return;
+    const query = new URLSearchParams({ provider: selectedDrama.sourceProvider, id: selectedDrama.sourceId, episode: String(target) });
+    void fetch(`/api/nunodrama/play?${query}`).catch(() => undefined);
+  }, [selectedDrama, watching, episode, unlocked]);
+
   const activePlatform = platforms.find((item) => item.name === platform) ?? platforms[0];
   const filteredPlatforms = useMemo(
     () => platforms.filter((item) => item.name.toLowerCase().includes(platformQuery.trim().toLowerCase())),

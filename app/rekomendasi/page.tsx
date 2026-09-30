@@ -8,6 +8,13 @@ import { platforms } from "@/lib/platforms";
 import { Poster } from "@/components/poster";
 import type { Drama } from "@/lib/catalog";
 
+// Warms the server-side playback cache so Play is instant after the page opens.
+function prefetchPlayback(drama: Drama, episode = 1) {
+  if (!drama.sourceProvider || !drama.sourceId) return;
+  const query = new URLSearchParams({ provider: drama.sourceProvider, id: drama.sourceId, episode: String(episode) });
+  void fetch(`/api/nunodrama/play?${query}`).catch(() => undefined);
+}
+
 function dramaHref(drama: Drama) {
   const params = new URLSearchParams({
     rid: String(drama.id),
@@ -97,7 +104,7 @@ export default function RekomendasiPage() {
           {dramas.map((drama) => {
             const providerLabel = platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? "PintuMedia";
             return (
-              <Link className="drama-card" href={dramaHref(drama)} key={`${drama.sourceProvider ?? ""}-${drama.id}`}>
+              <Link className="drama-card" href={dramaHref(drama)} onPointerEnter={() => prefetchPlayback(drama)} onTouchStart={() => prefetchPlayback(drama)} key={`${drama.sourceProvider ?? ""}-${drama.id}`}>
                 <span className="poster-wrap">
                   <Poster drama={drama} />
                   <small className="recommendation-provider">{providerLabel}</small>

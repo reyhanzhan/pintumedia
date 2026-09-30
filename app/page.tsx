@@ -1059,14 +1059,18 @@ function AuthModal({ t, onClose, onAuthenticated }: { t: (id: string, en: string
 function HlsVideo({ src, isHls, onError }: { src: string; isHls: boolean; onError: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onErrorRef = useRef(onError);
+  const [buffering, setBuffering] = useState(true);
 
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { setBuffering(true); }, [src]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     if (isHls && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+      // Weak phones: start at the lowest quality so playback begins fast, then let ABR
+      // climb; cap quality to the player size and keep the buffer small.
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: false, startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 20, maxMaxBufferLength: 40 });
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => { void video.play().catch(() => undefined); });
@@ -1078,7 +1082,12 @@ function HlsVideo({ src, isHls, onError }: { src: string; isHls: boolean; onErro
     return () => { video.removeAttribute("src"); video.load(); };
   }, [src, isHls]);
 
-  return <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="metadata" onError={() => onErrorRef.current()} />;
+  return (
+    <>
+      <video ref={videoRef} className="nuno-video" controls autoPlay playsInline preload="auto" onError={() => onErrorRef.current()} onWaiting={() => setBuffering(true)} onPlaying={() => setBuffering(false)} onCanPlay={() => setBuffering(false)} />
+      {buffering && <span className="video-spinner" style={{ position: "absolute", inset: 0, margin: "auto", pointerEvents: "none" }} aria-hidden />}
+    </>
+  );
 }
 
 function DramaShelf({ title, moreLabel, lessLabel, dramas: shelfDramas, onSelect, showAll = false }: { title: string; moreLabel: string; lessLabel: string; dramas: readonly Drama[]; onSelect: (drama: Drama) => void; showAll?: boolean }) {

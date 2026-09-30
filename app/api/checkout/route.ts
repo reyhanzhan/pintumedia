@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     const publicCheckout = checkout.provider === "klikqris" ? { ...checkout, signature: undefined } : checkout;
     return NextResponse.json({ orderId, checkout: publicCheckout });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Checkout gagal dibuat.";
+    const dbMessage = typeof (error as { message?: unknown })?.message === "string" ? (error as { message: string }).message : "";
+    const message = error instanceof Error ? error.message : dbMessage ? `Checkout gagal disimpan: ${dbMessage}` : "Checkout gagal dibuat.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

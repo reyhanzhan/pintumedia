@@ -26,12 +26,21 @@ export async function GET(request: Request) {
     const isHls = /m3u8/i.test(playback.url);
     const isHttp = /^http:\/\//i.test(playback.url);
     let url = playback.url;
-    if (isHls && isHttp) {
+    let fallbackUrl: string | undefined;
+    const mediaProxy = `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`;
+    if (provider === "nunomix" && !isHls) {
+      // nunomix's origin is slow from our host (~10 KB/s) but NunoDrama's own https proxy
+      // (CORS + Range, documented as "untuk Browser / Web Player") measured 1.4-4.6 MB/s and
+      // needs no token. The browser streams from it directly; our proxy stays as fallback.
+      const nunoBase = (process.env.NUNODRAMA_API_BASE_URL || "https://go.nunodrama.my.id").replace(/\/$/, "");
+      url = `${nunoBase}/api/nunomix/proxy?url=${encodeURIComponent(playback.url)}`;
+      fallbackUrl = mediaProxy;
+    } else if (isHls && isHttp) {
       url = `/api/nunodrama/hlsproxy?u=${encodeURIComponent(playback.url)}`;
     } else if (provider === "bstation" || (isHttp && !isHls)) {
-      url = `/api/nunodrama/media?provider=${encodeURIComponent(provider)}&id=${encodeURIComponent(sourceId)}&episode=${episode}`;
+      url = mediaProxy;
     }
-    return NextResponse.json({ ...playback, url, isHls }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `lookup;dur=${tookMs}` } });
+    return NextResponse.json({ ...playback, url, isHls, fallbackUrl }, { headers: { "Cache-Control": "private, no-store", "Server-Timing": `lookup;dur=${tookMs}` } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Playback NunoDrama tidak tersedia.";
     return NextResponse.json({ error: message }, { status: 502 });

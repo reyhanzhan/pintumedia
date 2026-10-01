@@ -931,15 +931,18 @@ function ContinueWatching({ dramas, onSelect, onRemove, t }: { dramas: Drama[]; 
 }
 
 function RecommendationShelf({ dramas, provider, curated, onSelect, t }: { dramas: Drama[]; provider: string; curated: boolean; onSelect: (drama: Drama) => void; t: (id: string, en: string) => string }) {
+  // Label each card with the film's own provider (e.g. GoodShort), not the site's platform name.
+  const labelFor = (drama: Drama) => platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? provider;
+  const shelfProvider = dramas.length ? labelFor(dramas[0]) : provider;
   return <section className="recommendation-section" aria-label={t("Rekomendasi", "Recommendations")}>
     <div className="recommendation-heading">
       <span className="recommendation-icon"><Sparkles size={24} /></span>
-      <div><h2>{t("Rekomendasi", "Recommendations")}</h2><p>{curated ? t("Pilihan tim PintuMedia untukmu", "Picked for you by the PintuMedia team") : t(`Pilihan drama pendek untukmu di ${provider}`, `Short-drama picks for you on ${provider}`)}</p></div>
+      <div><h2>{t("Rekomendasi", "Recommendations")}</h2><p>{curated ? t("Pilihan tim PintuMedia untukmu", "Picked for you by the PintuMedia team") : t(`Pilihan drama pendek untukmu di ${shelfProvider}`, `Short-drama picks for you on ${shelfProvider}`)}</p></div>
       <Link href="/rekomendasi">{t("Selengkapnya", "View all")} <ChevronRight size={18} /></Link>
     </div>
     <div className="drama-grid recommendation-grid">
       {dramas.map((drama) => {
-        const providerLabel = curated ? (platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? provider) : provider;
+        const providerLabel = labelFor(drama);
         return <button className="drama-card" key={drama.id} onClick={() => onSelect(drama)}>
           <span className="poster-wrap"><Poster drama={drama} /><b className="recommendation-hot">HOT</b><small className="recommendation-provider">{providerLabel}</small>{drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}<em><Play size={23} fill="currentColor" /></em></span>
           <strong>{drama.title}</strong>

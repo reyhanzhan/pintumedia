@@ -155,6 +155,12 @@ export default function Home() {
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Back to guest: forget the remembered checkout email and every unlock derived from the
+    // account, otherwise the previous (paid) session's access stays on screen after logout.
+    try { window.localStorage.removeItem("pintumedia_email"); } catch { /* storage may be unavailable */ }
+    setCheckoutEmail("");
+    setGlobalUnlocked(false);
+    setUnlockedDramaIds(new Set());
     notify(t("Anda telah keluar", "You have signed out"));
   };
 
@@ -346,7 +352,7 @@ export default function Home() {
       // Also runs without a saved email: the server falls back to the logged-in account.
       fetch(`/api/entitlements/check?email=${encodeURIComponent(savedEmail ?? "")}`)
         .then((response) => response.json() as Promise<{ unlocked: boolean; global?: boolean }>)
-        .then((data) => { if (data.global) setGlobalUnlocked(true); })
+        .then((data) => setGlobalUnlocked(!!data.global))
         .catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(hydrateCheckoutEmail);

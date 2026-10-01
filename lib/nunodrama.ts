@@ -217,7 +217,7 @@ export async function fetchNunoCatalog(provider: string, language: "in" | "en", 
     page: String(page),
   });
   const catalog = parseCatalog(payload, provider);
-  if (!catalog.length) throw new Error("NunoDrama API returned an empty catalog");
+  if (!catalog.length) throw new Error(`NunoDrama API returned an empty catalog. Upstream payload: ${JSON.stringify(payload)?.slice(0, 700)}`);
   return catalog;
 }
 

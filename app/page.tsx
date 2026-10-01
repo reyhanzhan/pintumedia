@@ -931,8 +931,6 @@ function ContinueWatching({ dramas, onSelect, onRemove, t }: { dramas: Drama[]; 
 }
 
 function RecommendationShelf({ dramas, provider, curated, onSelect, t }: { dramas: Drama[]; provider: string; curated: boolean; onSelect: (drama: Drama) => void; t: (id: string, en: string) => string }) {
-  // Label each card with the film's own provider (e.g. GoodShort), not the site's platform name.
-  const labelFor = (drama: Drama) => platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? provider;
   return <section className="recommendation-section" aria-label={t("Rekomendasi", "Recommendations")}>
     <div className="recommendation-heading">
       <span className="recommendation-icon"><Sparkles size={24} /></span>
@@ -941,7 +939,7 @@ function RecommendationShelf({ dramas, provider, curated, onSelect, t }: { drama
     </div>
     <div className="drama-grid recommendation-grid">
       {dramas.map((drama) => {
-        const providerLabel = labelFor(drama);
+        const providerLabel = provider; // always the site brand (PintuMedia), whatever provider the film comes from
         return <button className="drama-card" key={drama.id} onClick={() => onSelect(drama)}>
           <span className="poster-wrap"><Poster drama={drama} /><b className="recommendation-hot">HOT</b><small className="recommendation-provider">{providerLabel}</small>{drama.spriteX === undefined && <i>{drama.episodes > 0 ? `${drama.episodes} EP` : "EP"}</i>}<em><Play size={23} fill="currentColor" /></em></span>
           <strong>{drama.title}</strong>

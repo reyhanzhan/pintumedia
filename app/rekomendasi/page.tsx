@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { platforms } from "@/lib/platforms";
 import { Poster } from "@/components/poster";
 import type { Drama } from "@/lib/catalog";
 
@@ -102,7 +101,7 @@ export default function RekomendasiPage() {
         {!failed && !loading && !dramas.length && <p style={{ color: "#8e9bb0" }}>Belum ada drama untuk ditampilkan.</p>}
         <div className="drama-grid recommendation-grid">
           {dramas.map((drama) => {
-            const providerLabel = platforms.find((item) => item.slug === drama.sourceProvider)?.name ?? "PintuMedia";
+            const providerLabel = "PintuMedia"; // site brand on every card, whatever provider the film comes from
             return (
               <Link className="drama-card" href={dramaHref(drama)} onPointerEnter={() => prefetchPlayback(drama)} onTouchStart={() => prefetchPlayback(drama)} key={`${drama.sourceProvider ?? ""}-${drama.id}`}>
                 <span className="poster-wrap">

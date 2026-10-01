@@ -20,13 +20,13 @@ export async function GET(request: Request) {
   const language = requestUrl.searchParams.get("language") === "en" ? "en" : "in";
   const requestedPage = Number(requestUrl.searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? Math.min(requestedPage, 100) : 1;
-  // "hot": recommendation feed straight from one NunoDrama provider, in the API's own order.
-  // Default goodshort (video CDN measured fast, ~0.2s lookups, 24/page). The "nunomix" feed
-  // streams from a single slow origin (~10 KB/s through our proxy) so it is not the default.
-  // Override with HOT_PROVIDERS=idrama (or a comma list, which is interleaved).
+  // "hot": recommendation feed straight from NunoDrama's NunoMix /recommend ("Feed rekomendasi
+  // beranda"), in the API's own order. Its videos now play through NunoDrama's own https
+  // proxy (see /api/nunodrama/play), which is fast. Override with HOT_PROVIDERS=goodshort (or a
+  // comma list, which is interleaved) if a provider's video CDN ever gets slow again.
   if (platform === "hot" && process.env.NUNODRAMA_API_TOKEN) {
-    const HOT_PROVIDERS = (process.env.HOT_PROVIDERS || "goodshort").split(",").map((item) => item.trim()).filter((item) => supportsNunoProvider(item));
-    if (!HOT_PROVIDERS.length) HOT_PROVIDERS.push("goodshort");
+    const HOT_PROVIDERS = (process.env.HOT_PROVIDERS || "nunomix").split(",").map((item) => item.trim()).filter((item) => supportsNunoProvider(item));
+    if (!HOT_PROVIDERS.length) HOT_PROVIDERS.push("nunomix");
     const settled = await Promise.allSettled(HOT_PROVIDERS.map((provider) => fetchNunoCatalog(provider, language, page)));
     const lists = settled.map((result) => (result.status === "fulfilled" ? result.value : []));
     const dramas = Array.from({ length: Math.max(0, ...lists.map((list) => list.length)) }, (_, index) => lists.map((list) => list[index])).flat().filter(Boolean);

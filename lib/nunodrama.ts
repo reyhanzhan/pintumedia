@@ -201,6 +201,45 @@ function findUrl(payload: unknown, depth = 0): string | null {
   return null;
 }
 
+// Catalog feeds usually omit the synopsis; the per-drama "detail" endpoint has it.
+const SYNOPSIS_KEYS = ["description", "introduction", "intro", "synopsis", "summary", "desc", "brief", "bookIntro", "book_intro", "abstract", "introduce", "about", "content"];
+const EPISODE_KEYS = ["chapterCount", "chapter_count", "episodeCount", "episode_count", "totalEpisode", "totalEpisodes", "total_episodes", "episodes", "num_videos"];
+
+function findInPayload<T>(payload: unknown, keys: string[], accept: (value: unknown) => T | null): T | null {
+  const queue: unknown[] = [payload];
+  for (let visited = 0; queue.length && visited < 400; visited += 1) {
+    const object = record(queue.shift());
+    if (!object) continue;
+    for (const key of keys) {
+      const found = accept(object[key]);
+      if (found !== null) return found;
+    }
+    for (const value of Object.values(object)) {
+      if (Array.isArray(value)) queue.push(...value.slice(0, 20));
+      else if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return null;
+}
+
+const detailCache = new Map<string, { at: number; value: Promise<{ synopsis: string; episodes: number }> }>();
+
+export function fetchNunoDetail(provider: string, sourceId: string) {
+  const key = `${provider}|${sourceId}`;
+  const hit = detailCache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.value;
+  const config = NUNO_PROVIDERS[provider];
+  if (!config) return Promise.reject(new Error(`Provider ${provider} belum didukung adapter NunoDrama.`));
+  const value = requestJson(`/api/${config.apiSlug}/detail`, { [config.idParam || "book_id"]: sourceId }).then((payload) => ({
+    synopsis: findInPayload(payload, SYNOPSIS_KEYS, (v) => (typeof v === "string" && v.trim().length > 10 ? v.trim() : null)) ?? "",
+    episodes: findInPayload(payload, EPISODE_KEYS, (v) => (typeof v === "number" || (typeof v === "string" && /^d+$/.test(v)) ? Number(v) || null : null)) ?? 0,
+  }));
+  detailCache.set(key, { at: Date.now(), value });
+  value.catch(() => detailCache.delete(key));
+  if (detailCache.size > 300) detailCache.delete(detailCache.keys().next().value as string);
+  return value;
+}
+
 export function supportsNunoProvider(provider: string) {
   return !!NUNO_PROVIDERS[provider];
 }

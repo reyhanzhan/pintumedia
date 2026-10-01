@@ -292,6 +292,28 @@ export default function Home() {
     void fetch(`/api/nunodrama/play?${query}`).catch(() => undefined);
   }, [selectedDrama, watching]);
 
+  // Catalog entries (hot shelf, /rekomendasi deep links, most providers) carry no synopsis; fetch it
+  // from the per-drama detail endpoint when the detail page opens.
+  const detailId = selectedDrama?.id;
+  const detailProvider = selectedDrama?.sourceProvider;
+  const detailSourceId = selectedDrama?.sourceId;
+  const needsDetail = !!selectedDrama && (!selectedDrama.synopsis || !selectedDrama.episodes);
+  useEffect(() => {
+    if (!needsDetail || !detailProvider || !detailSourceId) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ provider: detailProvider, id: detailSourceId });
+    fetch(`/api/nunodrama/detail?${query}`, { signal: controller.signal })
+      .then((response) => response.json() as Promise<{ synopsis?: string; episodes?: number }>)
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setSelectedDrama((current) => current && current.id === detailId
+          ? { ...current, synopsis: current.synopsis || data.synopsis || "", episodes: current.episodes || data.episodes || 0 }
+          : current);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [needsDetail, detailId, detailProvider, detailSourceId]);
+
   const activePlatform = platforms.find((item) => item.name === platform) ?? platforms[0];
   const filteredPlatforms = useMemo(
     () => platforms.filter((item) => item.name.toLowerCase().includes(platformQuery.trim().toLowerCase())),

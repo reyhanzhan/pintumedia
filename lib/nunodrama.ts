@@ -81,7 +81,7 @@ function settings() {
 }
 
 function proxyPosterUrl(value: string, provider: string) {
-  if (!value || provider !== "dramabite") return value;
+  if (!value || (provider !== "dramabite" && provider !== "melolo")) return value;
   const { token } = settings();
   const src = Buffer.from(value, "utf8").toString("base64url");
   const sig = createHmac("sha256", token).update(src).digest("base64url");
